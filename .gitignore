@@ -1,0 +1,14 @@
+config.json
+local/
+node_modules/
+__pycache__/
+.DS_Store
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.aiff
+*.mp4
+*.mov
+tl.js
+out/

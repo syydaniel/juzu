@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>片场成片</title>
+<style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } canvas { display: block; width: 100vw; height: 100vh; }</style>
+<script>
+// ?shots=xxx：换用 shots_xxx.js 这张导演表（不写就是 shots.js），两版导演表对比时用。
+// ?tl=xxx：换用 tl_xxx.js 这条时间线（不写就是 tl.js），比如配音还没出来时，按字数估的那条存成 tl_draft.js，用 ?tl=draft。
+(() => { const q = new URLSearchParams(location.search), ok = (v) => v && /^[\w-]+$/.test(v) ? v : null, shots = ok(q.get('shots')), tl = ok(q.get('tl'));
+  const imports = { three: './node_modules/three/build/three.module.js', 'three/addons/': './node_modules/three/examples/jsm/', 'three/examples/jsm/': './node_modules/three/examples/jsm/' };
+  if (shots) imports['./shots.js'] = `./shots_${shots}.js`;
+  document.write(`<script src="${tl ? `tl_${tl}.js` : 'tl.js'}"><\/script><script type="importmap">${JSON.stringify({ imports })}<\/script>`); })();
+</script>
+<script type="module">
+// 成片页面：书房片场 + 床角 + 主持小机器人 + 显示器里的内容 + 最上面的叠字层。画面只跟着 t 走：window.render(t)。
+// 时间线在 tl.js（python3 mk_tl.py 生成），导演表在 shots.js。
+// 查片场用的开关：?cam=机位名 固定机位，?pose=px,py,pz,lx,ly,lz,mm,f 任意机位，?clay=1 灰模，?level=0..7 只开到某一级，?clean 不画叠字层，?ns=采样数，
+//   ?light=lowsun|day|afternoon|dusk|night 固定一种光（不跟导演表的 LIGHT 走），?lt=night&bed=1 同上但带床头壁灯，?bl=-1.35 固定百叶角度。
+// 去掉某样新东西（对比用）：?nobed 床角（悬浮段跟着没了）、?nophotos 照片墙、?nodoor 门、?noshelf 矮书柜、?nosteam 杯子的热气。
+//   导演表里写 SET: { bed: false, photos: false, door: false, shelf: false } 是同样的意思，整期都不要。
+import { Stage, Q } from './harness3.js';
+import { buildDesk } from './desk.js';
+import { Film } from './film.js';
+import { buildExtras } from './extras.js';
+import { buildBed } from './bed.js';
+import { buildPhotoWall } from './photowall.js';
+import { buildDoor } from './door.js';
+import { buildShelf } from './shelf.js';
+if (!window.TL) { document.body.style.cssText = 'color:#eee;font:20px sans-serif;padding:40px'; document.body.textContent = '还没有 tl.js：在 set/ 里先跑 python3 mk_tl.py'; throw new Error('没有 tl.js，先跑 python3 mk_tl.py'); }
+const stage = new Stage(), film = new Film(stage), SET = film.S.SET || {}, on = (k) => SET[k] !== false && !Q.has('no' + k);
+const set = buildDesk(stage, { screenW: 3200, drawScreen: (g, w, h, t) => film.drawScreen(g, w, h, t), door: on('door') });
+const extras = buildExtras(stage, set, { kaka: film.S.KAKA_AT, ...SET });
+await extras.load();
+const bed = on('bed') ? buildBed(stage, set, { clockStart: SET.clock }) : null;   // 床角：床、被子、枕头、毛绒小熊、床头柜和闹钟、壁灯、地毯
+if (bed && on('photos')) bed.photos = buildPhotoWall(stage, set);              // 床头上方的照片墙（悬浮段的照片就是它们）
+if (on('door')) buildDoor(stage, set);                                          // 前墙上的门和开关
+if (on('shelf')) buildShelf(stage, set);                                        // 软木板下面的矮书柜
+if (film.S.MAGIC?.length && !bed?.photos) console.warn('导演表里有悬浮段（MAGIC），但床角或照片墙关掉了：小机器人照样飞，照片没有');
+await film.init(set, extras, bed);
+stage.tick = (t) => { film.tick(t); set.tick(t); bed?.tick(t); };
+stage.tickFast = (t) => film.tickFast(t);                                       // 运动模糊：每个采样只推进快的东西
+stage.poseAt = (t) => film.poseAt(t);
+if (typeof film.S.LIGHT === 'string' && !Q.has('light')) stage.light = film.S.LIGHT;   // LIGHT 写一个名字：整期一种光；写成一张表：随时间变（film.js 的 light）
+stage.applyLook();
+window.DUR = film.DUR;
+const NS0 = stage.ns, FAST = film.fastSpans();                                  // 快的那几秒（悬浮段、导演表的 NS）出片时用更多采样
+window.render = async (t) => { await film.prepare(t); const f = NS0 >= 12 && FAST.find(([a, b]) => t >= a && t < b); stage.ns = f ? Math.max(NS0, f[2]) : NS0;
+  stage.renderFrame(t); film.over.draw(t, stage.renderer.domElement); };   // 叠字层最后画：磨砂卡要用到这一帧的三维画面
+window.STATS = () => ({ samples: stage.count }); window.film = film; window.stage = stage;
+window.READY = true;
+</script>

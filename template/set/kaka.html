@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>小机器人立绘</title>
+<style>html, body { margin: 0; background: transparent; overflow: hidden }</style>
+<script type="importmap">
+{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/", "three/examples/jsm/": "./node_modules/three/examples/jsm/" } }
+</script></head><body>
+<script type="module">
+// 把小机器人单独画成一张透明底的图，给屏幕里的 2D 小机器人用（media/kaka.png）。tools/kaka_png.mjs 会打开这一页截图。
+// 参数：?pose=thumbsUp&face=happy&yaw=-18&look=…（look 是 KAKA_LOOK 的 JSON，和 shots.js 里写的一样）
+import * as THREE from 'three';
+import { makeRig, applyState, STATE0, FACES, POSES } from './kaka.js';
+import { recolor } from './kaka_look.js';
+const q = new URLSearchParams(location.search), W = innerWidth, H = innerHeight;
+const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+r.setPixelRatio(1); r.setSize(W, H); r.setClearColor(0x000000, 0); r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xfff6ea, 0x8a7f74, 1.6));
+const key = new THREE.DirectionalLight(0xffffff, 2.6); key.position.set(3, 6, 5); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: .5, far: 20 }); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9fd8ff, 1.2); rim.position.set(-4, 3, -3); scene.add(rim);
+const rig = makeRig({ faceRes: 10, shadows: true, outlineWidth: .03 }); rig.setOutline(true);
+recolor(rig.root, q.get('look') ? JSON.parse(q.get('look')) : null);
+scene.add(rig.root, rig.ground);
+const P = POSES[q.get('pose') || 'thumbsUp'] || POSES.stand;
+applyState(rig, { ...STATE0, t: 0, yaw: +(q.get('yaw') ?? -18), hop: 0, legK: [1, 1],
+  body: [P.lean, P.bow, P.twist], head: [P.hRoll, P.hPitch, P.hYaw], armL: P.aL, armR: P.aR, thumb: [P.thumbL, P.thumbR],
+  antenna: [0, 0], face: { ...FACES[q.get('face') || 'happy'] }, audio: { open: 0, bright: .5, wave: null, level: 0 }, meter: [1, 1, 1] });
+rig.root.updateMatrixWorld(true);
+const box = new THREE.Box3().setFromObject(rig.root), c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+const cam = new THREE.PerspectiveCamera(22, W / H, .1, 100), fit = Math.max(size.y, size.x * H / W) * 1.08;
+const dist = fit / 2 / Math.tan(THREE.MathUtils.degToRad(11));
+cam.position.set(c.x, c.y + size.y * .08, c.z + dist); cam.lookAt(c.x, c.y - size.y * .02, c.z);
+r.render(scene, cam);
+window.READY = true;
+</script></body></html>

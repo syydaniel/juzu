@@ -1,0 +1,93 @@
+{
+ "说明": "这一集的声音都写在这里：配乐（beds 写什么、plan 怎么拼）、柔和音效（sfx_soft）、片场动作声（set_fx）、环境声（ambience）、电平（levels）。时间写法和导演表一样：12.5 | a01（这句开始）| a01$（这句结束）| a01:关键词 | END（片尾卡）| DUR（全片结束），后面可以跟 +0.3 / -0.2。以「说明」开头的键是给人看的，脚本不读。",
+
+ "说明_beds": "作曲用。每段一个名字，gen_beds.py 按它写候选（music/cands/<名字>_<种子>.wav），用户挑定以后把候选名写进 pick，master_beds.py 做成 music/<名字>.wav。role 是 open 的那段是开场：不压缩、不统一响度，留着起伏。dur 写 auto 就按 plan 里这段要用的长度写，不循环。calm 默认 true，会在描述后面加一句「平缓、没有鼓、没有拍子」。key 也用来给柔和音效挑音高。",
+ "beds": {
+  "open": {
+   "role": "open",
+   "bpm": 66,
+   "key": "D major",
+   "dur": 36,
+   "seeds": [4101, 4102, 4103],
+   "caption": "Beautiful, serene cinematic opening: a soft solo piano melody over a warm, slowly swelling string pad and airy choir-like synth, gentle and awe-filled, like watching a sunrise over mountains.",
+   "lyrics": "[Intro]\n[Instrumental]\n[soft solo piano, airy pad]\n\n[Verse]\n[warm strings slowly swell]\n\n[Outro]\n[piano alone, fading]",
+   "pick": ""
+  },
+  "explain": {
+   "bpm": 70,
+   "key": "F major",
+   "dur": "auto",
+   "seeds": [4101, 4102],
+   "caption": "Gentle, beautiful ambient piano underscore: slow felt piano chords and sparse melodic phrases, a soft warm string pad underneath, occasional distant celesta. Calm, thoughtful and tender.",
+   "lyrics": "[Intro]\n[Instrumental]\n[slow felt piano chords]\n\n[Verse]\n[soft string pad joins]\n\n[Verse]\n[sparse piano melody, tender]\n\n[Bridge]\n[strings a little warmer, still calm]\n\n[Outro]\n[piano alone, soft fade]",
+   "pick": ""
+  },
+  "close": {
+   "bpm": 64,
+   "key": "E-flat major",
+   "dur": "auto",
+   "seeds": [4101, 4102],
+   "caption": "Tender, moving cinematic finale: an intimate solo piano melody, then a warm string section enters very softly and blooms into a gentle, heartfelt swell, resolving peacefully. Beautiful and hopeful, never loud.",
+   "lyrics": "[Intro]\n[Instrumental]\n[intimate solo piano melody]\n\n[Verse]\n[warm strings enter softly]\n\n[Build]\n[gentle heartfelt swell]\n\n[Outro]\n[peaceful resolve, piano and strings fade]",
+   "pick": ""
+  }
+ },
+
+ "说明_plan": "配乐怎么拼（mix.py → out/bed.wav）。每一截：from 到 to 用哪段铺底、从铺底的第几秒（offset）开始、加减几 dB（gain）。两截之间留空就是停乐。开场那段 gain 别给太大：64 期给到 11，总峰值超了，改成 4。",
+ "plan": [
+  {"from": "0", "to": "a03$+0.3", "bed": "explain", "offset": 300, "gain": -2},
+  {"from": "a03$+0.4", "to": "a03$+30.4", "bed": "open", "offset": 0, "gain": 4},
+  {"from": "b01-0.2", "to": "g01-0.5", "bed": "explain", "offset": 0, "gain": 0},
+  {"from": "g01-0.5", "to": "DUR", "bed": "close", "offset": 0, "gain": 1}
+ ],
+
+ "说明_levels": "混音的电平（stems.py）。voice_rms 人声有声部分的 RMS；bed_db 配乐整体压多少；duck_ratio 人声出现时配乐被压的比例；sfx_db 音效轨整体加减；target 三条相加的响度；tp 真峰值上限。下面是 64 期的数。",
+ "levels": {"voice_rms": -20, "bed_db": -13, "duck_ratio": 5, "sfx_db": 0, "target": -16, "tp": -1},
+
+ "说明_sfx_soft": "柔和音效（softfx.py 做，cue_fx.py 摆 → out/sfx_cues.wav）。可用的名字：air1 air2 air3（章节换段的一口气，pre 是提前几秒慢慢起来）、tap1 到 tap4（轻敲，从低到高）、chime（小铃，点赞）、thud（片尾卡落下）、bloom（全片最重的那一下，一般不用）。gain 在文件原有音量上加减 dB。少放：一集十几处就够。sfx_notes 可以不写，不写就从铺底的调里挑共有的音。",
+ "sfx_notes": ["C4", "F4", "G4", "C5"],
+ "sfx_soft": [
+  {"at": "c01", "name": "air1", "pre": 0.45},
+  {"at": "d01", "name": "air2", "pre": 0.45},
+  {"at": "b08:点个赞", "name": "chime"},
+  {"at": "c14:评论区", "name": "tap3"},
+  {"at": "END", "name": "thud"}
+ ],
+
+ "说明_set_fx": "片场动作声（events.mjs 从导演表读出时刻，set_fx.py 做 → out/sfx_set.wav）。动作种类：tok 字块落桌、unroll 纸展开、stick 贴截图、card 立体卡、rise 牌子升起、pin 图钉、hopin / hopout 小机器人跳进跳出屏幕。gain 每种再加减几 dB，off 关掉某种，extra 补导演表以外的动作。",
+ "set_fx": {
+  "gain": {"tok": 0, "unroll": -2, "stick": -2, "card": -3, "rise": -2, "pin": -3, "hopin": 0, "hopout": -2},
+  "off": [],
+  "extra": []
+ },
+
+ "说明_ambience": "环境声（ambience.py → music/amb/<名字>.wav，stems.py 按 at 摆进音效轨）。只用真实录音：自己下载的放 sfx/lib/（写好 来源.md，不进公开仓库），或者在 config 的 ambience_dirs 里找（默认达芬奇的 Fairlight 音效库）。找文件：juzu.py ambience --find wind。segments 的时间是这段环境声里的秒数，切点和画面一样。每层 level 是这一层的 RMS（dB）；distance 是 [相对切点的秒, 到镜头的米数]，远处闷、近了亮；hits 是一下一下的点缀。semitones 正数升调、负数降调。整段统一到 lufs，再在分轨里比配乐低 under_music 个 LU。",
+ "ambience": {
+  "montage": {
+   "at": "a03$+0.4",
+   "dur": 30,
+   "lufs": -24,
+   "under_music": 7,
+   "fade_out": 2.0,
+   "segments": [
+    {"from": 0, "to": 7.6, "fade_in": 1.2, "layers": [
+     {"role": "bed", "file": "mountain_wind.wav", "start": 2.0, "level": -23}
+    ]},
+    {"from": 7.6, "to": 15.1, "layers": [
+     {"role": "main", "file": "steam_train_departure.wav", "start": 59.5, "level": -21},
+     {"role": "detail", "file": "train_rattle.wav", "start": 7.0, "level": -26, "highpass": 80}
+    ]},
+    {"from": 15.1, "to": 22.15, "layers": [
+     {"role": "bed", "file": "desert_ambience.wav", "start": 20.0, "level": -25},
+     {"role": "main", "file": "engine_hum.wav", "start": 6.3, "semitones": 2, "level": -20,
+      "distance": [[-0.45, 140], [2.05, 95], [3.05, 60], [5.05, 22], [7.55, 9]]},
+     {"role": "detail", "file": "Jeep Metal Rattle Suspension.M.wav", "level": -27, "lowpass": 5000,
+      "hits": [{"at": 5.25, "src": 0.3, "len": 0.7, "gain": 0.5}, {"at": 6.65, "src": 1.5, "len": 0.7, "gain": 0.7}]}
+    ]},
+    {"from": 22.15, "to": 30, "layers": [
+     {"role": "bed", "file": "mountain_wind.wav", "start": 14.0, "level": -23}
+    ]}
+   ]
+  }
+ }
+}

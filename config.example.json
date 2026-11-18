@@ -1,0 +1,23 @@
+{
+  "说明": "复制成 config.json 再改。路径可以用 ~。没填的项用这里的默认值。private_words 写你的真名、账号名这类不想在公开内容里出现的词，发布前的体检会查。",
+  "productions_dir": "~/videos/productions",
+  "py": "python3",
+  "py_audio": "python3",
+  "py_music": "~/ACE-Step-1.5/.venv/bin/python",
+  "acestep_root": "~/ACE-Step-1.5",
+  "voice_ref": "",
+  "voice_ref_fast": "",
+  "voice_ref_text": "",
+  "voice_speed": 1.06,
+  "voice_rate": 5.3,
+  "tts_model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+  "whisper_model": "mlx-community/whisper-large-v3-turbo",
+  "ambience_dirs": [
+    "~/Movies/Fairlight Sound Library"
+  ],
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "banned_words": [],
+  "cta_phrase": "我也想要",
+  "series": "",
+  "private_words": []
+}

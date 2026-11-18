@@ -1,0 +1,14 @@
+# 口播稿两道检查要的包。flavor.py 只用标准库，下面这些都是 score.py 的。
+# 测过的环境：Python 3.12，macOS，下面写的版本。jieba、wordfreq、spaCy 模型的版本一变，分词和词频跟着变，分数会有出入。
+# 装法：python3 -m pip install -r requirements.txt
+jieba==0.42.1
+numpy
+wordfreq==3.1.1
+# spaCy 管 47 项词性和句法指标。中文模型 zh_core_web_md 下载约 78 MB，装好约 117 MB。
+# 也可以先装 spacy，再跑 python -m spacy download zh_core_web_md
+spacy>=3.8,<3.9
+zh_core_web_md @ https://github.com/explosion/spacy-models/releases/download/zh_core_web_md-3.8.0/zh_core_web_md-3.8.0-py3-none-any.whl
+# funasr 管重新断句，用它的 ct-punc 标点模型，第一次运行时自动下载约 1 GB。funasr 要 torch，但不会自己装。
+# torch 装好约 600 MB，只用 CPU 就够。
+torch
+funasr==1.4.26

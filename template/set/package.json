@@ -1,0 +1,16 @@
+{
+  "name": "juzu-set",
+  "private": true,
+  "type": "module",
+  "description": "剧组的书房片场：three.js 场景、导演表、逐帧出片",
+  "scripts": {
+    "kaka": "npx --yes esbuild@0.25.10 char/entry.ts --bundle --format=esm --external:three --outfile=kaka.js",
+    "chk": "node tools/chk.mjs .",
+    "tl": "python3 mk_tl.py",
+    "kaka-png": "node tools/kaka_png.mjs ."
+  },
+  "dependencies": {
+    "playwright-core": "^1.48.0",
+    "three": "0.186.1"
+  }
+}
