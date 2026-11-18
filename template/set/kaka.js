@@ -1282,6 +1282,7 @@ var POSES = {
   stand: P02,
   happy: p({ bow: -3, lean: -1.5, hRoll: 6, hPitch: -5, aL: [30, 22, 12, 18], aR: [26, 18, 10, 14] }),
   point: p({ twist: 10, lean: 2, hYaw: 8, hRoll: -3, aR: [92, 4, 22, 24], aL: [14, 10, 6, 8] }),
+  reach: p({ twist: -12, lean: 5, hPitch: 9, hYaw: -6, hRoll: 3, aL: [58, 74, 8, 10], aR: [16, 12, 6, 8] }),   // 往前下方伸手（笔记本那一段，光线从这只手拉出去）
   pointUp: p({ hPitch: -10, hRoll: 6, aR: [158, 12, 14, 18], aL: [14, 10, 6, 8] }),
   think: p({ lean: -2, hRoll: 10, hPitch: -6, hYaw: -6, aR: [18, 196, 42, 70], aL: [10, 6, 6, 8] }),
   shrug: p({ bow: -2, hRoll: -9, aL: [64, -86, 18, 30], aR: [60, -80, 20, 32] }),

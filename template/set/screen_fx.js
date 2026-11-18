@@ -161,14 +161,14 @@ function quote(g, w, h, it, t) {
   if (it.who) { g.font = `500 ${26 * s}px ${SANS}`; g.fillStyle = C.dim; g.globalAlpha = P(t, ta + 1, .5); g.fillText('出自 ' + it.who, 150 * s, y0 + lines.length * 80 * s + 30 * s); g.globalAlpha = 1; }
 }
 
-// ---------- 大字（新版）：字一个个浮上来，下面一道金线扫过，背景在流动。it: { kicker, big, small, col, size } ----------
+// ---------- 大字（新版）：字一个个浮上来，下面一道金线扫过，背景在流动。it: { kicker, big, small, col, size, kSize（kicker 字号，默认 30）, sSize（small 字号，默认 32） } ----------
 function bigwords(g, w, h, it, t) {
   const A = chrome(g, w, h, it.title, it.sub), s = A.s; ambient(g, w, h, t, s, it.hue ?? 38);
-  if (it.kicker) { g.font = `600 ${30 * s}px ${SANS}`; g.fillStyle = C.dim; revealText(g, it.kicker, w / 2, h * .32, t, it.t0, { align: 'center', dt: .03 }); }
+  if (it.kicker) { g.font = `600 ${(it.kSize || 30) * s}px ${SANS}`; g.fillStyle = C.dim; revealText(g, it.kicker, w / 2, h * .32, t, it.t0, { align: 'center', dt: .03 }); }
   g.font = `800 ${(it.size || 110) * s}px ${SANS}`; g.fillStyle = it.col || C.gold;
   const [x0, tw] = revealText(g, it.big, w / 2, h * .5, t, it.t0 + .15, { align: 'center', rise: 30 * s });
   const lu = easeIO(P(t, it.t0 + .3 + [...it.big].length * .045, .6)); g.fillStyle = C.gold; g.fillRect(x0, h * .5 + (it.size || 110) * s * .62, tw * lu, 6 * s);
-  if (it.small) { g.font = `500 ${32 * s}px ${SANS}`; g.fillStyle = C.text; g.globalAlpha = P(t, it.t0 + .8, .5); g.textAlign = 'center'; g.fillText(it.small, w / 2, h * .70); g.globalAlpha = 1; g.textAlign = 'left'; }
+  if (it.small) { g.font = `500 ${(it.sSize || 32) * s}px ${SANS}`; g.fillStyle = C.text; g.globalAlpha = P(t, it.t0 + .8, .5); g.textAlign = 'center'; g.fillText(it.small, w / 2, h * .70); g.globalAlpha = 1; g.textAlign = 'left'; }
 }
 
 

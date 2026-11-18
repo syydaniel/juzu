@@ -16,7 +16,7 @@ const T = (x) => { try { return TX(x); } catch { return NaN; } }, f1 = (x) => x.
 console.log(`时间写法 ${n} 个，解析不了的 ${bad.size} 个`); for (const b of bad) console.log('  ✗', b);
 
 // 按口播顺序写：同一张表里，后一条的时刻不该比前一条早（KAKA 例外：它可以穿插）
-for (const [name, key] of [['CAM', 'at'], ['SCREEN', 't0'], ['FX3D', 'at'], ['STICK', 't0'], ['GLASS', 't0'], ['BOARD', 't0'], ['KAKA_IN', 't0'], ['CTA', 'at']]) {
+for (const [name, key] of [['CAM', 'at'], ['SCREEN', 't0'], ['FX3D', 'at'], ['STICK', 't0'], ['GLASS', 't0'], ['BOARD', 't0'], ['KAKA_IN', 't0'], ['CTA', 'at'], ['PHONE', 'at'], ['HOLO', 't0'], ['NOTEBOOK', 'at'], ['VISIT', 't0']]) {
   const L = (S[name] || []).map((x) => T(x[key] ?? x.at ?? x.t0)); for (let i = 1; i < L.length; i++) if (L[i] < L[i - 1] - .05) warn.push(`${name} 第 ${i + 1} 条（${f1(L[i])} 秒）比上一条（${f1(L[i - 1])} 秒）早：按口播顺序写`); }
 
 // 屏幕：中间不要有空档
@@ -55,6 +55,8 @@ for (const c of cams.filter((c) => KC.includes(c.cam))) { let miss = 0, tot = 0;
 
 // 悬浮段：一段至少 12 秒（起飞 1.7、照片长出来到亮内容 5.6、收回去 4.4）；两段不要叠在一起
 const mg = (S.MAGIC || []).map((m) => [T(m.t0), T(m.t1)]).sort((a, b) => a[0] - b[0]);
+// 笔记本要有小机器人飞过去（VISIT）才掀得开：光线从它手心拉出去
+for (const e of S.NOTEBOOK || []) { const t = T(e.at); if (!(S.VISIT || []).some((v) => T(v.t0) + 1.3 < t && t < T(v.t1))) warn.push(`${f1(t)} 秒的笔记本（NOTEBOOK）旁边没有 VISIT：小机器人不在，光线没处拉，写一段 VISIT 让它飞过去`); }
 mg.forEach(([a, b], i) => { if (b - a < 12) warn.push(`${f1(a)} 秒的悬浮段只有 ${f1(b - a)} 秒：至少 12 秒，照片才来得及长出来、亮内容、再飞回墙上`); if (i && a < mg[i - 1][1]) warn.push(`${f1(a)} 秒的悬浮段和上一段叠在一起了`); });
 // 换光：一下子换掉的光（d 小于 0.5 秒）要放在硬切上，环境反射只在硬切时重拍；镜头中间换，反射要到下一刀才跟上
 if (Array.isArray(S.LIGHT)) { const cuts = cams.filter((c, i) => i === 0 || (c.d ?? 2.2) <= 0).map((c) => c.t);

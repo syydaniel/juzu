@@ -1,7 +1,7 @@
 {
  "说明": "这一集的声音都写在这里：配乐（beds 写什么、plan 怎么拼）、柔和音效（sfx_soft）、片场动作声（set_fx）、环境声（ambience）、电平（levels）。时间写法和导演表一样：12.5 | a01（这句开始）| a01$（这句结束）| a01:关键词 | END（片尾卡）| DUR（全片结束），后面可以跟 +0.3 / -0.2。以「说明」开头的键是给人看的，脚本不读。",
 
- "说明_beds": "作曲用。每段一个名字，gen_beds.py 按它写候选（music/cands/<名字>_<种子>.wav），用户挑定以后把候选名写进 pick，master_beds.py 做成 music/<名字>.wav。role 是 open 的那段是开场：不压缩、不统一响度，留着起伏。dur 写 auto 就按 plan 里这段要用的长度写，不循环。calm 默认 true，会在描述后面加一句「平缓、没有鼓、没有拍子」。key 也用来给柔和音效挑音高。",
+ "说明_beds": "作曲用。每段一个名字，gen_beds.py 按它写候选（music/cands/<名字>_<种子>.wav），用户挑定以后把候选名写进 pick，master_beds.py 做成 music/<名字>.wav。role 是 open 的那段是开场：不压缩、不统一响度，留着起伏。dur 写 auto 就按 plan 里这段要用的长度写，不循环。描述用正面的整句（见 stages/3-作曲.md），calm 默认 false，写 true 会在描述后面加一句「平缓、给旁白让路」。一段别超过 240 秒，长的在 plan 里拆两截，写 xf_out / xf_in。key 也用来给柔和音效挑音高。",
  "beds": {
   "open": {
    "role": "open",
@@ -9,8 +9,8 @@
    "key": "D major",
    "dur": 36,
    "seeds": [4101, 4102, 4103],
-   "caption": "Beautiful, serene cinematic opening: a soft solo piano melody over a warm, slowly swelling string pad and airy choir-like synth, gentle and awe-filled, like watching a sunrise over mountains.",
-   "lyrics": "[Intro]\n[Instrumental]\n[soft solo piano, airy pad]\n\n[Verse]\n[warm strings slowly swell]\n\n[Outro]\n[piano alone, fading]",
+   "caption": "A serene, awe-filled cinematic opening. A soft felt piano melody in the middle register floats over warm low strings that slowly swell, and a mellow French horn answers with long smooth notes, like watching a sunrise over mountains. Clean, modern, high-fidelity studio production: warm and lush, mellow rounded highs, short natural reverb.",
+   "lyrics": "[Intro]\n[Instrumental]\n[soft felt piano, warm low strings]\n\n[Verse]\n[warm strings slowly swell]\n\n[Outro]\n[piano alone, fading]",
    "pick": ""
   },
   "explain": {
@@ -18,7 +18,7 @@
    "key": "F major",
    "dur": "auto",
    "seeds": [4101, 4102],
-   "caption": "Gentle, beautiful ambient piano underscore: slow felt piano chords and sparse melodic phrases, a soft warm string pad underneath, occasional distant celesta. Calm, thoughtful and tender.",
+   "caption": "A gentle, thoughtful underscore for storytelling narration. Slow felt piano chords in the low-middle register with sparse melodic phrases, a warm cello carrying a long counter-line, soft sustained strings underneath. Calm and tender, beatless, with a slow steady arc. Clean, modern, high-fidelity studio production: warm and lush, mellow rounded highs, short natural reverb.",
    "lyrics": "[Intro]\n[Instrumental]\n[slow felt piano chords]\n\n[Verse]\n[soft string pad joins]\n\n[Verse]\n[sparse piano melody, tender]\n\n[Bridge]\n[strings a little warmer, still calm]\n\n[Outro]\n[piano alone, soft fade]",
    "pick": ""
   },
@@ -27,7 +27,7 @@
    "key": "E-flat major",
    "dur": "auto",
    "seeds": [4101, 4102],
-   "caption": "Tender, moving cinematic finale: an intimate solo piano melody, then a warm string section enters very softly and blooms into a gentle, heartfelt swell, resolving peacefully. Beautiful and hopeful, never loud.",
+   "caption": "A tender, moving cinematic finale. An intimate felt piano melody, then warm low strings and a soft French horn enter very softly and bloom into a gentle, heartfelt swell, resolving peacefully. Hopeful and never loud. Clean, modern, high-fidelity studio production: warm and lush, mellow rounded highs, short natural reverb.",
    "lyrics": "[Intro]\n[Instrumental]\n[intimate solo piano melody]\n\n[Verse]\n[warm strings enter softly]\n\n[Build]\n[gentle heartfelt swell]\n\n[Outro]\n[peaceful resolve, piano and strings fade]",
    "pick": ""
   }
@@ -54,7 +54,7 @@
   {"at": "END", "name": "thud"}
  ],
 
- "说明_set_fx": "片场动作声（events.mjs 从导演表读出时刻，set_fx.py 做 → out/sfx_set.wav）。动作种类：tok 字块落桌、unroll 纸展开、stick 贴截图、card 立体卡、rise 牌子升起、pin 图钉、hopin / hopout 小机器人跳进跳出屏幕。gain 每种再加减几 dB，off 关掉某种，extra 补导演表以外的动作。",
+ "说明_set_fx": "片场动作声（events.mjs 从导演表读出时刻，set_fx.py 做 → out/sfx_set.wav）。动作种类：tok 字块落桌、unroll 纸展开、stick 贴截图、card 立体卡、rise 牌子升起、pin 图钉、hopin / hopout 小机器人跳进跳出屏幕（也用在 VISIT、MAGIC 的飞走飞回），pushoff 字块被推开，buzz / flip 手机震动和翻面，holo 全息亮起，penroll / band / cover 笔记本打开，gather 浮空板上的东西聚拢。这些都由 events.mjs 从导演表推出来，gain 每种再加减几 dB，off 关掉某种，extra 补导演表以外的动作。",
  "set_fx": {
   "gain": {"tok": 0, "unroll": -2, "stick": -2, "card": -3, "rise": -2, "pin": -3, "hopin": 0, "hopout": -2},
   "off": [],

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { rng, wood, plaster, fabric, speckle, canvasTex } from './tex.js';
+import { lampBulbRig } from './lamps.js';
 
 export const DIM = {
   room: { W: 3.4, D: 3.2, H: 2.6 },
@@ -175,19 +176,25 @@ export function buildDesk(stage, opts = {}) {
   // ---------- 10 台灯：底座、灯杆、灯罩、灯泡 ----------
   const lamp = group(DIM.lamp.x, TOP, DIM.lamp.z);
   lathe([[0, 0], [.073, 0], [.075, .003], [.075, .012], [.07, .016], [.014, .021], [.007, .03], [0, .03]], M.steel, 0, 0, 0, lamp); cyl(.005, .36, M.steel, 0, .2, 0, lamp, 16);
-  lathe([[.11, .30], [.109, .303], [.066, .44], [.0655, .437]], M.shade, 0, 0, 0, lamp); add(new THREE.TorusGeometry(.11, .0025, 8, 64), M.steel, 0, .30, 0, lamp).rotation.x = Math.PI / 2; add(new THREE.TorusGeometry(.066, .0025, 8, 48), M.steel, 0, .44, 0, lamp).rotation.x = Math.PI / 2;
+  lathe([[.11, .30], [.109, .303], [.066, .44], [.0655, .437]], M.shade, 0, 0, 0, lamp).userData.lampShade = true; add(new THREE.TorusGeometry(.11, .0025, 8, 64), M.steel, 0, .30, 0, lamp).rotation.x = Math.PI / 2; add(new THREE.TorusGeometry(.066, .0025, 8, 48), M.steel, 0, .44, 0, lamp).rotation.x = Math.PI / 2;
   const bulb = add(new THREE.SphereGeometry(.026, 24, 16), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, .37, 0, lamp, { cast: false, recv: false });
-  const lampLight = new THREE.PointLight(0xffc38a, 0, 5, 2); lampLight.position.set(0, .37, 0); lampLight.castShadow = true; lampLight.shadow.mapSize.set(1024, 1024); lampLight.shadow.bias = -.003; lampLight.shadow.camera.near = .03; lamp.add(lampLight);
+  // 台灯照布灯罩的样子分三路（lamps.js）：往下一束，灯罩下口多大就照多大（灯泡到下口边 57°），边是软的；往上一束，上口小（43°），暗一些；
+  // 透过布的一点光，往四周都有但很弱，照不出灯罩自己的影子。只放一个点光的话，墙上、天花板上会被灯罩口切出几道很硬的大弧，像探照灯。
+  // 灯泡有大小：harness3 每个采样把整组灯在灯泡里挪一下（stage.emit），影子边是软的。
+  const lampRig = lampBulbRig(lamp, [0, .37, 0], { down: [1.0, .35], up: [.74, .55] });
 
   // ---------- 11 笔记本和笔 ----------
+  let noteG = null;   // 笔记本能翻开（notebook.js，导演表 NOTEBOOK），几个部件交出去
   { const N = DIM.note, nb = group(N.x, TOP, N.z, 'note'); nb.rotation.y = .21;
-    B(N.w, .0015, N.l, .0007, M.navy, 0, .00075, 0, nb); B(N.w - .004, N.t - .003, N.l - .004, .0005, M.paper, -.001, N.t / 2, 0, nb); B(N.w, .0015, N.l, .0007, M.navy, 0, N.t - .00075, 0, nb);
-    B(.007, N.t + .0006, N.l + .0006, .0003, M.black, N.w / 2 - .018, N.t / 2, 0, nb);
+    B(N.w, .0015, N.l, .0007, M.navy, 0, .00075, 0, nb); const paper = B(N.w - .004, N.t - .003, N.l - .004, .0005, M.paper, -.001, N.t / 2, 0, nb); const top = B(N.w, .0015, N.l, .0007, M.navy, 0, N.t - .00075, 0, nb);
+    const band = B(.007, N.t + .0006, N.l + .0006, .0003, M.black, N.w / 2 - .018, N.t / 2, 0, nb);
     const pen = group(-.01, N.t + .0045, .01, null, nb); pen.rotation.y = .9; cyl(.0045, .125, M.black, 0, 0, 0, pen, 16).rotation.z = Math.PI / 2;
-    const tip = add(new THREE.ConeGeometry(.0045, .014, 16), M.alu, .0695, 0, 0, pen); tip.rotation.z = -Math.PI / 2; B(.04, .0012, .003, .0005, M.alu, -.035, .0048, 0, pen); }
+    const tip = add(new THREE.ConeGeometry(.0045, .014, 16), M.alu, .0695, 0, 0, pen); tip.rotation.z = -Math.PI / 2; B(.04, .0012, .003, .0005, M.alu, -.035, .0048, 0, pen);
+    noteG = { nb, top, band, pen, paper, N, M }; }
 
   // ---------- 12 手机 ----------
-  { const P = DIM.phone, ph = group(P.x, TOP, P.z); ph.rotation.y = -.31; const pm = stage.mat({ color: 0x343840, rough: .32 }); B(P.w, P.t, P.l, .0035, pm, 0, P.t / 2, 0, ph); B(.032, .0022, .032, .0009, pm, -.015, P.t + .0008, -.05, ph);
+  let phoneG = null;   // 手机能翻过来亮屏（phone.js，导演表 PHONE），整组交出去
+  { const P = DIM.phone, ph = group(P.x, TOP, P.z); ph.rotation.y = -.31; phoneG = ph; const pm = stage.mat({ color: 0x343840, rough: .32 }); B(P.w, P.t, P.l, .0035, pm, 0, P.t / 2, 0, ph); B(.032, .0022, .032, .0009, pm, -.015, P.t + .0008, -.05, ph);
     for (const [lx, lz] of [[-.022, -.057], [-.008, -.043]]) { cyl(.0062, .0012, M.gloss, lx, P.t + .0023, lz, ph, 24); add(new THREE.TorusGeometry(.0066, .0006, 6, 24), M.alu, lx, P.t + .0026, lz, ph, { cast: false }).rotation.x = Math.PI / 2; } }
 
   // ---------- 13–15 搁板、支架、书、盆栽 ----------
@@ -273,7 +280,7 @@ export function buildDesk(stage, opts = {}) {
   const lightNow = (p) => { const L = stage.level, clay = stage.clay;
     stage.sun.base.set(...p.sun); sun.position.set(...p.sun); sun.color.set(p.col); sun.intensity = p.I; sun.shadow.radius = L >= 4 || clay ? 2 : 1;
     paintSky(p.hor, p.top); stage.exposure = p.exp; M.slat.emissive.set(p.col); M.slat.emissiveIntensity = L >= 3 && !clay ? p.glow : 0; screenMat.emissiveIntensity = L === 0 ? 1 : p.scr;
-    lampLight.intensity = p.lamp; lampLight.castShadow = p.lamp > .02; M.shade.emissive.set(0xffb777); M.shade.emissiveIntensity = p.lamp > .02 && L >= 1 && !clay ? .9 * Math.min(1, p.lamp / 1.2) : 0; scrLight.intensity = .25 * Math.max(0, 1 - p.I / 3); bulb.material.color.setScalar(1.2 + Math.min(1, p.lamp / 2) * 12.8); bulb.visible = !clay;
+    lampRig.set(p.lamp, { down: 1, up: .32, glow: .22 }, stage); M.shade.emissive.set(0xffb777); M.shade.emissiveIntensity = p.lamp > .02 && L >= 1 && !clay ? .9 * Math.min(1, p.lamp / 1.2) : 0; scrLight.intensity = .25 * Math.max(0, 1 - p.I / 3); bulb.material.color.setScalar(1.2 + Math.min(1, p.lamp / 2) * 12.8); bulb.visible = !clay;
     outs.forEach((m, i) => m.material.color.setRGB(...p.out.map(v => v * (.55 + .5 * ((i * 37) % 10) / 10))));
     if (!clay && L >= 3) { bounceA.intensity = p.bounce * 2.2; bounceB.intensity = p.bounce * 1.2; } };
   stage.onLook = () => { const p = PRESET[stage.light] || PRESET.lowsun, L = stage.level, clay = stage.clay;
@@ -285,10 +292,15 @@ export function buildDesk(stage, opts = {}) {
   // 两组光按 u 混合（颜色按 RGB 混，位置按直线混）
   const mixLight = (a, b, u) => { const o = {}; for (const k in a) { const x = a[k], y = b[k] ?? x;
       o[k] = Array.isArray(x) ? x.map((v, i) => v + (y[i] - v) * u) : k === 'col' ? new THREE.Color(x).lerp(new THREE.Color(y), u).getHex() : x + (y - x) * u; } return o; };
-  // 每帧调：p 是这一刻混好的光。环境贴图（反射和环境光）只在 key 变了的时候重拍，key 是最近一个硬切；按切点那一刻的光（pKey）拍。
-  // 这样分段渲染时每段拍出来都一样，光的跳变藏在切里。所以整段换光要放在硬切上，软切或镜头中间换光，反射要到下一刀才跟上。
+  // 每帧调：p 是这一刻混好的光。环境贴图（反射和环境光）只在 key 变了的时候重拍，按 pKey 那一刻的光拍。
+  // key 只由 t 推出来（film.js 的 light）：最近一个硬切，或者硬切之后最近一次换光、转百叶走完的时刻；光正在变的时候每帧都拍。
+  // 这样分段渲染时每段拍出来都一样，光的跳变藏在切里。所以猛地换光要放在硬切上。
   let envKey = null;
-  const setLight = (p, key, pKey) => { if (!stage.clay && stage.level >= 3 && key !== envKey) { envKey = key; lightNow(pKey || p); stage.captureEnv(new THREE.Vector3(1.6, 1.3, 1.5)); stage.scene.environmentIntensity = 1.15; } lightNow(p); };
+  // 显示器在环境贴图里只当一块固定亮度的暗屏：屏幕内容每秒都在变，拍进去就会让整间屋子跟着忽明忽暗（harness3.captureEnv 调 envHooks）
+  let keep = null; (stage.envHooks ??= []).push({ pre: () => { keep = [screenMat.emissiveMap, screenMat.emissive.clone()]; screenMat.emissiveMap = null; screenMat.emissive.setRGB(.05, .055, .065); screenMat.needsUpdate = true; },
+    post: () => { [screenMat.emissiveMap] = keep; screenMat.emissive.copy(keep[1]); screenMat.needsUpdate = true; } });
+  // pre：拍之前先把百叶、床头灯这些摆到 pKey 那一刻（film.js 传进来）
+  const setLight = (p, key, pKey, pre) => { if (!stage.clay && stage.level >= 3 && key !== envKey) { envKey = key; pre?.(); lightNow(pKey || p); stage.captureEnv(new THREE.Vector3(1.6, 1.3, 1.5)); stage.scene.environmentIntensity = 1.15; } lightNow(p); };
 
   // ---------- 运镜：关键帧里是 时间、机位、看向、焦距、光圈值、对焦点 ----------
   const SCR = [DK.x, MN.cy, MN.z], MUG = [DIM.mug.x, TOP + .05, DIM.mug.z], BL = [.04, 1.5, 1.25];
@@ -315,5 +327,5 @@ export function buildDesk(stage, opts = {}) {
     right: { p: V([3.1, 1.25, 1.3]), l: V([1.4, .9, .4]), focus: V(SCR), mm: 28, f: 5.6 }, top: { p: V([1.45, 2.3, 1.0]), l: V([1.45, .74, .44]), focus: V([1.45, .74, .44]), mm: 28, f: 5.6 },
     desktop: { p: V([1.75, 1.22, 1.15]), l: V([1.5, .78, .5]), focus: V([1.5, .78, .5]), mm: 35, f: 5.6 } };
   const tick = opts.drawScreen ? (t) => { opts.drawScreen(scr.getContext('2d'), scr.width, scr.height, t); scrTex.needsUpdate = true; } : drawScreen;   // 成片：屏幕由导演表来画
-  return { room, KEYS, STOPS, DUR, poseAt, tick, PRESET, mixLight, setLight, setTilt: (a, w) => setTilt(a, w), M, T, add, B, rb, lathe, cyl, tube, group, screen: { canvas: scr, tex: scrTex, mat: screenMat }, TOP, MATTOP, artMesh, DIM };
+  return { room, KEYS, STOPS, DUR, poseAt, tick, PRESET, mixLight, setLight, setTilt: (a, w) => setTilt(a, w), M, T, add, B, rb, lathe, cyl, tube, group, screen: { canvas: scr, tex: scrTex, mat: screenMat }, TOP, MATTOP, artMesh, DIM, phone: phoneG, note: noteG };
 }

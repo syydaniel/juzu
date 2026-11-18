@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { rng, wood, canvasTex } from './tex.js';
+import { lampBulbRig } from './lamps.js';
 
 export const BED = { x0: .025, z0: 1.27, w: 1.20, l: 1.89, top: .50, mh: .20, r: .055, frameH: .30 };
 const HB = { t: .05, h: 1.02 };                                          // 床头板：厚 5 厘米，顶离地 1.02
@@ -213,11 +214,14 @@ export function buildBed(stage, set, opts = {}) {
   const lamp = {};
   { add(new THREE.CylinderGeometry(.04, .04, .012, 32), set.M.black, 0, 0, -.006, sconce).rotation.x = Math.PI / 2;
     set.tube([[0, 0, -.01], [0, .02, -.12], [-.06, .04, -.24]], .006, set.M.black, sconce);
-    const hd = group(-.06, .04, -.24, null, sconce); add(new THREE.LatheGeometry([[.075, -.11], [.074, -.108], [.04, 0], [.039, -.002]].map(([x, y]) => new THREE.Vector2(x, y)), 48), set.M.shade, 0, 0, 0, hd);
+    const hd = group(-.06, .04, -.24, null, sconce); add(new THREE.LatheGeometry([[.075, -.11], [.074, -.108], [.04, 0], [.039, -.002]].map(([x, y]) => new THREE.Vector2(x, y)), 48), set.M.shade, 0, 0, 0, hd).userData.lampShade = true;
     lamp.bulb = add(new THREE.SphereGeometry(.018, 20, 14), new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, -.05, 0, hd, { cast: false, recv: false });
-    const L = lamp.light = new THREE.SpotLight(0xffc38a, 0, 4, 1.05, .6, 2); L.position.set(0, -.05, 0); hd.add(L);
-    L.target.position.set(-.55, -.9, -.35); hd.add(L.target); L.castShadow = false; L.shadow.mapSize.set(1024, 1024); L.shadow.bias = -.002; L.shadow.camera.near = .03; }
-  lamp.set = (v) => { lamp.light.intensity = v * 3.2; lamp.light.castShadow = v > .02; lamp.bulb.material.color.setScalar(v > .02 ? 1.2 + 12 * v : 1.2); };
+    // 光束要顺着灯罩轴往下：斜着打的话会从灯罩侧面穿出去，在窗那面墙上拉出一道横线。所以是灯头本身朝床那边歪一点（摇臂壁灯本来就能掰），
+    // 宽度按灯罩下口算（51°）；三路光的分法见 lamps.js
+    hd.rotation.set(.2, 0, -.26);
+    lamp.rig = lampBulbRig(hd, [0, -.05, 0], { down: [.89, .4], up: [.66, .6], r: .02, glowDist: 2, upShadow: false }); }
+  // v：0 关、1 全亮；stage 传进来才登记灯泡大小（软影子），film.js 的 light 每帧调
+  lamp.set = (v, stage) => { lamp.rig.set(v, { down: 3.2, up: .15, glow: .45 }, stage); lamp.bulb.material.color.setScalar(v > .02 ? 1.2 + 12 * v : 1.2); };
   lamp.set(0);
 
   // ---------- 床边地毯：燕麦色平织，炭灰和陶土色的边，花边里一圈同色的小菱形，两头流苏；地毯不是完全平的 ----------

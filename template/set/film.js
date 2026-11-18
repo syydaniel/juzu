@@ -1,4 +1,4 @@
-// 成片的引擎：机位、小机器人的表演、显示器里画什么、软木板、桌上的字块、光和百叶、悬浮段、最上面的叠字层。全部只依赖 t。
+// 成片的引擎：机位、小机器人的表演、显示器里画什么、软木板、桌上的字块、光和百叶、悬浮段、手机、全息、笔记本、最上面的叠字层。全部只依赖 t。
 // 每一秒做什么写在 shots.js（导演表），这里只负责执行。导演表的写法见 skill 里的 reference/导演表.md。
 import * as THREE from 'three';
 import { Q } from './harness3.js';
@@ -11,6 +11,9 @@ import { FX3D } from './fx3d.js';
 import { BKINDS, boardNeeds, setTXb } from './board.js';
 import { Magic } from './magic.js';
 import { Steam } from './steam.js';
+import { Phone } from './phone.js';
+import { Holo } from './holo.js';
+import { Notebook } from './notebook.js';
 import { TL, TX, clamp, ease, ease5, easeOut, easeIO, lerp, P, hash } from './kit.js';
 import { Overlay } from './overlay.js';
 import SHOTS from './shots.js';
@@ -39,12 +42,15 @@ export class Film {
     rig.ground.visible = false; this.stage.scene.add(hold);
     for (const [k, u] of Object.entries(S.DATA || {})) this.data[k] = await json(u).catch(() => { console.warn('数据文件没找到，跳过：' + u); return null; });
     this.env = S.VOICE_ENV ? await json(S.VOICE_ENV).catch(() => null) : null;   // 配音的响度包络：小机器人的嘴。没有的时候按时间线里每句的起止假装在说
-    this.cams = S.CAM.map((c) => ({ ...c, t: TX(c.at) })).sort((a, b) => a.t - b.t);
+    this.cams = S.CAM.map((c) => ({ ...c, t: TX(c.at), rack: c.rack?.map(([a, p]) => [TX(a), p]) })).sort((a, b) => a.t - b.t);   // rack：对焦点按时刻一个个拉过去
     this.cams.forEach((c, i) => { c.dur = (this.cams[i + 1]?.t ?? this.DUR) - c.t; c.i = i; });   // 每个镜头的长度：运镜在这段时间里走完
     this.screens = calmScreens(S.SCREEN.map((s) => ({ ...s, t0: TX(s.t0), t1: TX(s.t1) })), this.cams, S.CALM);
     this.kk = S.KAKA.map((k) => ({ ...k, t: TX(k.at) })).sort((a, b) => a.t - b.t);
     this.kin = (S.KAKA_IN || []).map((k) => ({ ...k, t0: TX(k.t0), t1: TX(k.t1) }));
     this.fx3d = new FX3D(this.stage, S.FX3D || [], TX, set.TOP, set.MATTOP); if (bed) this.fx3d.surf = (x, z) => bed.duvetY(x, z) - .012;   // bed: true 的字块落在被子上，压进去一点
+    // 手机翻过来亮屏（phone.js）、小机器人打出全息投影（holo.js）。导演表里没有这张表就不建，片场照旧
+    this.phone = S.PHONE?.length ? new Phone(this.stage, set, extras, S.PHONE, TX) : null;
+    this.holo = S.HOLO?.length ? new Holo(this.stage, this.home, S.HOLO, TX) : null;
     this.boards = (S.BOARD || []).map((b) => ({ ...b, t0: TX(b.t0), t1: TX(b.t1) }));
     this.lines = Object.values(TL.lines);
     this.over = new Overlay(S, TX);
@@ -55,8 +61,21 @@ export class Film {
     const MG = (S.MAGIC || []).slice().sort((a, b) => TX(a.t0) - TX(b.t0)).map((m, i) => { const from = m.from ?? (i === 0 ? 'air' : 'wall');
       return { ...m, from, panel: m.panel && { ...m.panel, t0: m.panel.t0 !== undefined ? TX(m.panel.t0) : TX(m.t0) + (from === 'wall' ? 6.0 : 5.6), t1: TX(m.t1) } }; });
     if (MG.some((m) => TX(m.t1) - TX(m.t0) < 12)) console.warn('悬浮段短于 12 秒，照片来不及长出来再飞回去：', MG.map((m) => [m.t0, m.t1]));
-    this.magic = MG.length ? new Magic(this.stage, this, set, bed, MG, (x) => (typeof x === 'number' ? x : TX(x)),
-      (g, w, h, spec, t) => { const fn = ALL[spec.kind]; if (!fn) throw new Error('板上没有这种画面：' + spec.kind); setHead(spec.head ? { head: spec.head, t0: spec.t0, t } : null); setNoBar(true); fn(g, w, h, spec, t, this.data); setNoBar(false); setHead(null); }) : null;
+    // 板上可以分几段（panel.parts：[{ until, kind, … }]，最后一段不写 until），到点交叉淡化 0.4 秒
+    const one = (g, w, h, q, t) => { const fn = ALL[q.kind]; if (!fn) throw new Error('板上没有这种画面：' + q.kind); setHead(q.head ? { head: q.head, t0: q.t0, t } : null); setNoBar(true); fn(g, w, h, q, t, this.data); setNoBar(false); setHead(null); };
+    const board = (g, w, h, spec, t) => {
+      if (!spec.parts) return one(g, w, h, spec, t);
+      if (!spec._p) { let t0 = spec.t0; spec._p = spec.parts.map((q) => { const o = { ...q, t0, t1: q.until !== undefined ? TX(q.until) : spec.t1 }; t0 = o.t1; return o; }); }
+      const A = g.globalAlpha; spec._p.forEach((q, i) => { const a = i === 0 ? 1 : P(t, q.t0, .4), b = i === spec._p.length - 1 ? 1 : 1 - P(t, q.t1, .4), u = Math.min(a, b);
+        if (u <= 0 || t < q.t0 - .01 && i > 0) return; g.save(); g.globalAlpha = A * u; one(g, w, h, q, t); g.restore(); }); };
+    // VISIT：小机器人飞到桌上别的地方办事再飞回来（笔记本那一段用），起落和悬浮段同一套，所以也挂在 magic.js 上。两张表都没有时 magic 是 null
+    this.magic = MG.length || S.VISIT?.length ? new Magic(this.stage, this, set, bed, MG, (x) => (typeof x === 'number' ? x : TX(x)), board) : null;
+    this.magic?.setVisits(S.VISIT || [], TX);
+    this.notebook = S.NOTEBOOK?.length ? new Notebook(this.stage, set, S.NOTEBOOK, TX, this) : null; await this.notebook?.load();   // 桌上的笔记本被光线掀开（notebook.js）
+    // 拍环境贴图时先藏起来的东西：会动、会亮、会变的。不藏的话分块渲染时每块开头拍到的不一样，光会一跳一跳（见 harness3.captureEnv）
+    const M = this.magic, H = this.holo, N = this.notebook;
+    this.stage.envHide = [this.hold, M?.g, M?.jetLight, M?.wallLight, M?.panelLight, M?.handLight, bed?.photos?.root, H?.panel, H?.beam, H?.pts, H?.light, this.phone?.scr, N?.g, N?.light,
+      ...(this.steam?.p || []), ...this.fx3d.items.map((it) => it.g)].filter(Boolean);
   }
 
   // 某个机位在 t 时刻。
@@ -91,17 +110,22 @@ export class Film {
     let focus = c.focus ? V(c.focus) : V(b.focus || b.l); if (c.fk) focus = p.clone().lerp(focus, c.fk);   // fk：对焦在镜头前面的立体字卡上，后面的小机器人和房间虚掉
     return { p, l, focus, mm: c.mm ?? mm, f: c.f ?? b.f };
   }
+  // rack：[[时刻, [x, y, z]], …]，对焦点在镜头里一个个拉过去（每次 0.5 秒）。第一项的时刻不用，是镜头开始时的焦点
+  rackAt(c, pose, t) { if (!c.rack) return pose; let f = V(c.rack[0][1]); for (const [a, p] of c.rack.slice(1)) f = f.lerp(V(p), easeIO(P(t, a, .5))); return { ...pose, focus: f }; }
   poseAt(t) {
     if (Q.has('pose')) { const a = Q.get('pose').split(',').map(Number); return { p: V(a.slice(0, 3)), l: V(a.slice(3, 6)), focus: V(a.length > 9 ? a.slice(8, 11) : a.slice(3, 6)), mm: a[6] || 28, f: a[7] || 5.6 }; }   // 自检：?pose=px,py,pz,lx,ly,lz,mm,f[,fx,fy,fz]
     if (Q.has('cam')) { const b = this.S.CAMS[Q.get('cam')]; return { p: V(b.p), l: V(b.l), focus: V(b.focus || b.l), mm: b.mm, f: b.f }; }
     const L = this.cams; let i = 0; while (i + 1 < L.length && t >= L[i + 1].t) i++;
-    const cur = this.camAt(L[i], t); if (i === 0) return cur;
+    const cur = this.rackAt(L[i], this.camAt(L[i], t), t); if (i === 0) return cur;
     const d = L[i].d ?? 2.2; if (d <= 0 || t >= L[i].t + d) return cur;
-    const prev = this.camAt(L[i - 1], t), u = ease5((t - L[i].t) / d), sh = (a, b) => a.clone().lerp(b, u);
-    // 机位之间滑过去时，看的点和位置一起走；中间稍微往后让一点，免得两头都近的时候擦着屏幕过去
-    const p = sh(prev.p, cur.p), l = sh(prev.l, cur.l), back = Math.sin(u * Math.PI) * (L[i].arc ?? .06);
+    const prev = this.rackAt(L[i - 1], this.camAt(L[i - 1], t), t), u = ease5((t - L[i].t) / d), sh = (a, b) => a.clone().lerp(b, u);
+    // 机位之间滑过去时，看的点和位置一起走。中间不往后让：推进里夹一下后退，看着是「卡一下、来回推拉」。两头都近、怕擦着屏幕过去，导演表写 arc（米）。
+    // 对焦也不按三维点插值（那样对焦距离会先变远再变近，虚实来回）：按「离镜头多远」在对数上单调地走，而且比镜头快一点（先把焦点交过去）；光圈也在对数上走
+    const p = sh(prev.p, cur.p), l = sh(prev.l, cur.l), back = Math.sin(u * Math.PI) * (L[i].arc ?? 0);
     p.addScaledVector(p.clone().sub(l).normalize(), back);
-    return { p, l, focus: sh(prev.focus, cur.focus), mm: lerp(prev.mm, cur.mm, u), f: lerp(prev.f, cur.f, u) };
+    const fwd = l.clone().sub(p).normalize(), dist = (q) => Math.max(.05, q.focus.clone().sub(q.p).length()), uf = easeIO(clamp((t - L[i].t) / (d * .75)));
+    const fd = Math.exp(lerp(Math.log(dist(prev)), Math.log(dist(cur)), uf));
+    return { p, l, focus: p.clone().addScaledVector(fwd, fd), mm: lerp(prev.mm, cur.mm, u), f: Math.exp(lerp(Math.log(prev.f), Math.log(cur.f), uf)) };
   }
 
   // 小机器人的嘴有多大：有响度包络就照着它；还没配音的草稿，在每句话的起止之间按音节的节奏假装说话
@@ -140,6 +164,8 @@ export class Film {
     if (talk && (!k.face || k.face === 'speak')) Object.assign(face, FACES.speak);
     const bl = blinkAt(t, 3); face.open = [(face.open?.[0] ?? 1) * bl, (face.open?.[1] ?? 1) * bl];
     const nod = talk ? (Math.sin(t * 5.3) * 1.4 + Math.sin(t * 2.1 + 1)) * v : 0;
+    // act: 'nod' 点头 / 'shake' 摇头：1.1 秒，幅度越来越小
+    const adt = t - k.t, act = k.act && adt >= 0 && adt < 1.1 ? Math.sin(2 * Math.PI * 2.1 * adt) * 10 * (1 - adt / 1.1) ** 1.5 : 0, aP = k.act === 'nod' ? Math.abs(act) * 1.3 : 0, aY = k.act === 'shake' ? act * 1.6 : 0;
     const j = this.jump(t), h = this.hold;
     if (j?.hide) h.visible = false; else { h.visible = true; if (j) { h.position.copy(j.pos); h.scale.setScalar(j.s); yaw = -70; } else { h.position.copy(this.home); h.scale.setScalar(K.s); } }
     const mg = this.magic?.kaka(t, this.home); let bow = 0, Pq = Pm;                // 悬浮段：飞去坐墩、在那儿讲、再飞回来
@@ -153,41 +179,52 @@ export class Film {
           const mixA = (A, w) => A.map((x, n) => x + (G[n] - x) * w + (n === 3 ? 7 * vs * Math.sin(t * 4.7 + n) : 0));
           Pq = { ...Pq, aR: side || kind === 2 ? mixA(Pq.aR, a) : Pq.aR, aL: !side || kind === 2 ? mixA(Pq.aL, a * (kind === 2 ? .8 : 1)) : Pq.aL, hRoll: Pq.hRoll + (side ? -2.5 : 2.5) * a }; } } }
     const S = { ...STATE0, t, yaw, hop, legK: [1 + b * .024, 1 + b * .024],
-      body: [Pq.lean, Pq.bow + bow, Pq.twist], head: [Pq.hRoll + nod * .5, Pq.hPitch + b * .6 + nod * 1.2, Pq.hYaw], armL: Pq.aL, armR: Pq.aR, thumb: [Pq.thumbL, Pq.thumbR],
+      body: [Pq.lean, Pq.bow + bow, Pq.twist], head: [Pq.hRoll + nod * .5, Pq.hPitch + b * .6 + nod * 1.2 + aP, Pq.hYaw + aY], armL: Pq.aL, armR: Pq.aR, thumb: [Pq.thumbL, Pq.thumbR],
       antenna: [Math.sin(t * 1.7) * 3 + nod * 1.5, Math.sin(t * 2.3) * 2], face,
       audio: { open: v, bright: .5, wave: null, level: v }, meter: [v > .1 ? 1 : 0, v > .35 ? 1 : 0, v > .6 ? 1 : 0] };
     applyState(this.rig, S);
-    this.fx3d.update(t, (x) => this.poseAt(x));
     this.magic?.update(t, h.position);
     this.light(t);
     this.steam?.update(t);
+    this.fx3d.update(t, (x) => this.poseAt(x));
+    this.phone?.update(t); this.holo?.update(t, (x) => this.poseAt(x)); this.notebook?.update(t);
     this.drawBoard(t);
   }
   // 光随时间变。导演表 LIGHT：[{ at, p: 'lowsun' | 'day' | 'afternoon' | 'dusk' | 'night' | {…}, bed: 0 到 1（床头壁灯）, d: 过渡秒数 }]
   // 百叶：导演表 BLINDS：[{ at, a: 角度（弧度，-.5 平时，-1.35 合上，-.15 全开）, d: 秒 }]；转的时候每片错开一点。
-  // 环境反射只在最近一个硬切（d: 0 的镜头）重拍，所以整段换光放在硬切上。自检：?lt=night&bed=1 固定一种光，?bl=-1.35 固定百叶
+  // 环境反射在哪一刻拍（tcap）只由 t 决定：最近一个硬切，或者硬切之后最近一次换光、转百叶走完的时刻；光正在变的时候每帧按这一帧拍。
+  // 拍之前百叶和床头灯也摆到 tcap 那一刻，这样分块渲染时每块开头拍到的都一样。猛地换光放在硬切上。自检：?lt=night&bed=1 固定一种光，?bl=-1.35 固定百叶
   light(t) {
     if (!this._lt) { const L = Q.get('lt') ? [{ at: 0, p: Q.get('lt'), bed: +(Q.get('bed') ?? 1) }] : Array.isArray(this.S.LIGHT) && !Q.has('light') ? this.S.LIGHT : [];
       this._lt = L.map((k) => ({ ...k, t: TX(k.at) })).sort((a, b) => a.t - b.t);
-      const B = Q.get('bl') ? [{ at: 0, a: +Q.get('bl') }] : this.S.BLINDS || []; this._bl = B.map((k) => ({ ...k, t: TX(k.at) })).sort((a, b) => a.t - b.t); }
-    const K = this._lt, PR = this.set.PRESET;
+      const B = Q.get('bl') ? [{ at: 0, a: +Q.get('bl') }] : this.S.BLINDS || []; this._bl = B.map((k) => ({ ...k, t: TX(k.at) })).sort((a, b) => a.t - b.t);
+      this._spans = [...this._lt.slice(1).map((k) => [k.t, k.t + (k.d ?? 4)]), ...this._bl.slice(1).map((k) => [k.t, k.t + (k.d ?? 1.6)])]; }
+    const K = this._lt, BL = this._bl, PR = this.set.PRESET;
+    const tilt = (x) => { if (!BL.length || !this.set.setTilt) return; let i = 0; while (i + 1 < BL.length && x >= BL[i + 1].t) i++; const a = BL[Math.max(0, i - 1)], b = BL[i], u = i === 0 ? 1 : clamp((x - b.t) / (b.d ?? 1.6));
+      this.set.setTilt(lerp(a.a, b.a, easeIO(u)), .05 * Math.sin(Math.PI * u)); };
     if (K.length && this.set.setLight) {
       const get = (k) => { const p = typeof k.p === 'string' ? PR[k.p] : k.p; if (!p) throw new Error('LIGHT 里没有这种光：' + k.p); return { bed: 0, ...p, ...(k.bed !== undefined ? { bed: k.bed } : {}) }; };
       const at = (x) => { let i = 0; while (i + 1 < K.length && x >= K[i + 1].t) i++; const a = K[Math.max(0, i - 1)], b = K[i], u = i === 0 ? 1 : easeIO(clamp((x - b.t) / (b.d ?? 4))); return this.set.mixLight(get(a), get(b), u); };
+      const bedAt = (x) => this.bed?.lamp.set(at(x).bed ?? 0, this.stage);
       let tc = 0; for (const c of this.cams) { if (c.t > t) break; if ((c.d ?? 2.2) <= 0 || c.i === 0) tc = c.t; }   // 最近一个硬切
-      const p = at(t); this.set.setLight(p, 'cut@' + tc.toFixed(3), at(tc)); this.bed?.lamp.set(p.bed ?? 0); }
-    const BL = this._bl; if (BL.length && this.set.setTilt) {
-      let i = 0; while (i + 1 < BL.length && t >= BL[i + 1].t) i++; const a = BL[Math.max(0, i - 1)], b = BL[i], u = i === 0 ? 1 : clamp((t - b.t) / (b.d ?? 1.6));
-      this.set.setTilt(lerp(a.a, b.a, easeIO(u)), .05 * Math.sin(Math.PI * u)); }
+      let tcap = tc, live = false; for (const [a, b] of this._spans) { if (b <= t && b > tcap) tcap = b; if (a <= t && t < b) live = true; }
+      if (live) tcap = t;
+      this.set.setLight(at(t), live ? 'f@' + Math.round(t * 240) : 'cut@' + tcap.toFixed(3), at(tcap), () => { bedAt(tcap); tilt(tcap); });
+      bedAt(t); }
+    tilt(t);
   }
   // 快的那几秒要多采样：运动模糊是一个个采样叠出来的，飞得快的东西在 16 个采样下会一格一格地重影。
-  // 悬浮段自动算一段，导演表 NS: [{ t0, t1, ns: 32 }] 可以再加。只在出片（网址上的 ns 不小于 12）时生效，抽帧检查用 ns=4 不受影响
-  fastSpans() { const M = (this.S.MAGIC || []).map((m) => [TX(m.t0) - .3, TX(m.t1) + .3, 32]); return M.concat((this.S.NS || []).map((x) => [TX(x.t0), TX(x.t1), x.ns ?? 32])); }
+  // 悬浮段和 VISIT 的起落自动算，导演表 NS: [{ t0, t1, ns: 32 }] 可以再加。只在出片（网址上的 ns 不小于 12）时生效，抽帧检查用 ns=4 不受影响
+  fastSpans() { const M = (this.S.MAGIC || []).map((m) => [TX(m.t0) - .3, TX(m.t1) + .3, 32]);
+    const Vf = (this.S.VISIT || []).flatMap((v) => { const a = TX(v.t0), b = TX(v.t1), F = v.fly ?? 1.3; return [[a - .3, a + F + .3, 32], [b - F - .3, b + .3, 32]]; });   // VISIT 的起飞和飞回
+    return M.concat(Vf, (this.S.NS || []).map((x) => [TX(x.t0), TX(x.t1), x.ns ?? 32])); }
   // 运动模糊：harness3 的每个采样在自己的快门时刻调它，只推进快的东西（飞的小机器人、照片、掉落的字块）。慢的东西整帧只算一次
   tickFast(t) {
     const mg = this.magic?.kaka(t, this.home); if (mg) this.hold.position.copy(mg.pos);
-    this.magic?.update(t, this.hold.position, true); this.fx3d.update(t, (x) => this.poseAt(x));
+    this.magic?.update(t, this.hold.position, true); this.fx3d.update(t, (x) => this.poseAt(x)); this.phone?.update(t); this.notebook?.update(t, true);
   }
+  // 小机器人抬起来的那只手（世界坐标）：笔记本的光线从这里拉出去
+  handNear() { this.hold.updateWorldMatrix(false, true); let best = null; for (const a of this.rig.arms) { const q = a.hand.getWorldPosition(new THREE.Vector3()); if (!best || q.y > best.y) best = q; } return best; }
   curBoard(t) { return this.boards.find((b) => t >= b.t0 - .8 && t < b.t1 + .8); }
   // 软木板上的大白纸：t0 前 0.8 秒从上沿往下展开，t1 后卷回去
   drawBoard(t) {
@@ -203,7 +240,7 @@ export class Film {
     if (this.kin.some((k) => t >= k.t0 - 1 && t < k.t1 + 1)) want.add('media/kaka.png');
     for (const u of boardNeeds(this.curBoard(t))) want.add(u);
     for (const u of this.over.needs(t)) want.add(u);
-    const mgp = this.magic?.active(t)?.panel; if (mgp) { if (mgp.src) want.add(mgp.src); for (const u of needsOf(mgp, t)) want.add(u); }
+    const mgp = this.magic?.active(t)?.panel; if (mgp) for (const q of [mgp, ...(mgp.parts || [])]) { if (q.src) want.add(q.src); for (const u of needsOf(q, t)) want.add(u); }
     forget(want); await Promise.all([...want].map(need));
   }
   // 换内容的转场：新的一层写 tr：'push'（整页推过去）、'rise'（从下面升上来）、'cut'（直接换）、默认是淡入加一点点缩放

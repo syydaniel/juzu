@@ -94,13 +94,13 @@ export function buildExtras(stage, set, opts = {}) {
     const ring = add(new THREE.TorusGeometry(.04, .0012, 8, 64), new THREE.MeshBasicMaterial({ color: 0x9fe8da }), K.x, TOP + .0082, K.z, room, { cast: false, recv: false }); ring.rotation.x = Math.PI / 2; ring.userData.fixed = true; } }
 
   // ---------- 可选的摆设：画框里换自己的画、手机背面贴一张贴纸。颜色要暗、要安静，别抢桌上字的视线 ----------
-  const decor = [], D = opts.decor || {};
+  const decor = [], D = opts.decor || {}; let phoneSticker = null;   // 贴纸那一组交出去：手机翻面时（phone.js）跟着一起翻
   if (D.painting && set.artMesh) { const a = set.artMesh, pm = new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: .45 });   // 画面带一点清漆的光
     const pl = add(new THREE.PlaneGeometry(.30, .40), pm, a.position.x, a.position.y, .0078, room, { cast: false }); pl.visible = false;
     decor.push({ mat: pm, src: D.painting, ok: () => { pl.visible = true; a.visible = false; } }); }
   if (D.sticker && set.DIM) { const P = set.DIM.phone, ph = group(P.x, TOP + P.t + .0003, P.z); ph.rotation.y = -.31;            // 手机是扣着放的：摄像头在 (-.015, -.05)，贴纸贴在下半部
     const sm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .35, transparent: true, alphaTest: .4 }), st = add(new THREE.PlaneGeometry(.042, .042), sm, .008, 0, .03, ph, { cast: false });
-    st.rotation.x = -Math.PI / 2; st.rotation.z = .25; st.visible = false; decor.push({ mat: sm, src: D.sticker, ok: () => { st.visible = true; } }); }
+    st.rotation.x = -Math.PI / 2; st.rotation.z = .25; st.visible = false; decor.push({ mat: sm, src: D.sticker, ok: () => { st.visible = true; } }); phoneSticker = ph; }
 
   // 图：开始渲之前加载一次。文件不在就跳过：摆设保持默认，照片换成程序画的风景
   const load = async () => { const L = new THREE.TextureLoader();
@@ -109,5 +109,5 @@ export function buildExtras(stage, set, opts = {}) {
     const use = (t, mat) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; mat.map = t; mat.needsUpdate = true; };
     await Promise.all(decor.map(async (p) => { const t = await tex(p.src); if (t) { use(t, p.mat); p.ok(); } }));
     await Promise.all(prints.map(async (p, i) => { const t = (await tex(p.src)) || new THREE.CanvasTexture(genImage('print/' + i)); use(t, p.mat); })); };
-  return { load, board: CB, prints, sheet: { canvas: sheetC, tex: sheetT, g: sheetG } };
+  return { load, board: CB, prints, sheet: { canvas: sheetC, tex: sheetT, g: sheetG }, phoneSticker };
 }

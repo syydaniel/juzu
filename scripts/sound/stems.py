@@ -72,7 +72,7 @@ def build(amb_db, vlim, gain):
         f"[0:a]aresample=48000,highpass=f=70,equalizer=f=3000:t=q:w=1:g=2,volume={VG:.2f}dB,acompressor=threshold=-18dB:ratio=2.5:attack=8:release=150,aformat=channel_layouts=stereo,asplit=2[v0][sc]",
         f"[v0]volume={gain:.3f}dB,alimiter=limit={vlim}dB:attack=3:release=60:level=false[vo]",
         f"[1:a]aresample=48000,aformat=channel_layouts=stereo,highpass=f=50,equalizer=f=2500:t=q:w=1.2:g=-3.5,volume={LV['bed_db']}dB[bq]",
-        f"[bq][sc]sidechaincompress=threshold=0.02:ratio={LV['duck_ratio']}:attack=20:release=400,volume={gain:.3f}dB,alimiter=limit=-4dB:attack=5:release=80:level=false[mu]",
+        f"[bq][sc]sidechaincompress=threshold=0.02:ratio={LV['duck_ratio']}:attack=20:release=900,volume={gain:.3f}dB,alimiter=limit=-4dB:attack=5:release=80:level=false[mu]",
         *chains,
         f"{''.join(fx_in)}amix=inputs={len(fx_in)}:normalize=0:duration=first,volume={LV['sfx_db'] + gain:.3f}dB,alimiter=limit=-9dB:attack=2:release=60:level=false[fx]"])
     outs = sum((['-map', f'[{k}]', '-t', f'{DUR:.3f}', '-c:a', 'pcm_s24le', '-ar', '48000', S / f'{k2}.wav']

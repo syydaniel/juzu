@@ -1,6 +1,7 @@
 """配乐铺底拼接：  juzu.py mix   → out/bed.wav
 全部照这一集的 cues.json 来（时间写法见 common.Clock）：
   plan  配乐分段：[{"from": "0", "to": "b01-0.2", "bed": "groove", "offset": 0, "gain": 0}, …]；两段之间留空就是"停乐"
+        两截不同的曲子接在一起，可以写 xf_out / xf_in（秒）把交叉淡化拉长（默认 0.5 秒）
 音效不在这里做：片场动作的音效、章节气声、环境声见 scripts/sound/。"""
 import json, sys
 from pathlib import Path
@@ -29,15 +30,16 @@ bed = np.zeros((N, 2), np.float32); X = 0.5
 for p in CUES.get('plan', []):
     a, b = CK.at(p['from']), min(DUR, CK.at(p['to']))
     if b <= a: continue
-    i0, i1 = int(max(0, a - X / 2) * SR), int(min(DUR, b + X / 2) * SR)
+    xi, xo = p.get('xf_in', X), p.get('xf_out', X)
+    i0, i1 = int(max(0, a - xi / 2) * SR), int(min(DUR, b + xo / 2) * SR)
     src = beds[p['bed']]; j0 = int(p.get('offset', 0) * SR)
     seg = np.take(src, np.arange(j0, j0 + i1 - i0) % len(src), axis=0) * 10 ** (p.get('gain', 0) / 20)
-    f = int(X * SR); env = np.ones(len(seg), np.float32)
-    if a > 0: env[:f] = np.linspace(0, 1, f) ** 0.5
-    env[-f:] = np.linspace(1, 0, f) ** 0.5
+    fi, fo_ = int(xi * SR), int(xo * SR); env = np.ones(len(seg), np.float32)
+    if a > 0: env[:fi] = np.linspace(0, 1, fi) ** 0.5
+    env[-fo_:] = np.linspace(1, 0, fo_) ** 0.5
     bed[i0:i1] += seg * env[:, None]
 fo = int(4 * SR); e0 = int(DUR * SR) - fo; bed[e0:e0 + fo] *= np.linspace(1, 0, fo)[:, None]; bed[e0 + fo:] = 0
-sf.write(E / 'out/bed.wav', bed, SR)
+sf.write(E / 'out/bed.wav', bed, SR, subtype='FLOAT')   # 11-18：16 位会把调高了的段削顶（65 期 lessons 有 24 个点）
 
 msg = f"配乐 {len(CUES.get('plan', []))} 段（{'、'.join(names)}）"
 print(msg, '｜bed', round(rms_db(bed), 1), 'dB'); log(E, '3-作曲', '铺底拼接：' + msg)

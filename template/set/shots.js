@@ -2,6 +2,7 @@
 // 时间写法：'c05'（这句开始）、'c05$'（这句结束）、'c05:关键词'（念到这个词）、'c05:关键词+0.4'、数字秒、'END'（片尾卡）、'DUR'（全片结束）。
 // 这一份是演示：十一句口播，带着观众逛一遍片场（显示器、桌面和主持小机器人、软木板、床角），每一种东西都用到一次。新的一期从这里改起。
 // 床角那一站示范三样随时间变的东西：LIGHT（光，换光只放在硬切上）、BLINDS（百叶慢慢合上）、MAGIC（悬浮段，至少 12 秒）。
+// 手机翻面（PHONE）、全息投影（HOLO）、翻开的笔记本（NOTEBOOK + VISIT）演示里没用，写法在文末的注释里，要用时解开注释、换成这一期的词。
 export default function ({ TX, TL }) {
   const KAKA_AT = { x: 1.93, z: .36, s: .072 };                       // 主持小机器人站的地方（米）和大小
   const MON = [1.45, 1.085, .2273];                                   // 显示器屏幕中心
@@ -152,9 +153,33 @@ export default function ({ TX, TL }) {
   const BADGE = '';                                                   // 右上角的系列标，比如 '系列名 · 第 1 期'；空着就不画
   const NOBADGE = [];
 
+  // ---------- 演示里没用到的几样（写法见 reference/导演表.md），要用时解开注释、把时刻换成这一期的词 ----------
+  // 手机翻过来亮屏（phone.js）：at 开始翻（前面 0.6 秒震两下），t1 硬切那一刻扣回去；kind 'comments' 评论区 / 'chat' 对话
+  const PHONE = [
+    // { at: 'e03:评论区', t1: 'DUR', kind: 'comments', title: '评论区', lines: [{ at: 'e03:评论区+.6' }, { at: 'e03:评论区+1.0' }], hl: { at: 'e03:弹幕', text: '想看下雨天' } },
+  ];
+  // 小机器人打出全息投影（holo.js）：kind 'flow' 几项加箭头 / 'merge' 几项收成一个结果 / 'check' 对和错；pos 是相对它站的位置（米）
+  const HOLO = [
+    // { t0: 'c02:旁边', t1: 'c02:跳进屏幕-1.0', kind: 'merge', kicker: '一句话的重点', inputs: [{ text: '磨砂卡', at: 'c02:旁边' }, { text: '贴图', at: 'c02:旁边+.6' }], result: { text: '贴在旁边', at: 'c02:一定贴着' } },
+  ];
+  // 桌上的笔记本被光线掀开（notebook.js）：小机器人要先飞过去（VISIT，t0 比 at 早 1.75 秒左右），说到哪句就在哪句底下描金线
+  const NOTEBOOK = [
+    // { at: 'd01+.15', head: '片场笔记', lines: [{ text: '先灰模', size: 90, hl: 'd01:清单' }, { text: '再打光', size: 90, hl: 'd01:打勾' }] },
+  ];
+  const VISIT = [
+    // { t0: 'd01-1.6', t1: 'd01$+.6', to: [1.03, .36], yaw: -8, pose: 'present' },   // 落在笔记本正后方，面朝镜头
+  ];
+  // 其他新写法（都在别的表里加一个字段）：
+  //   CAM 一条里写 rack: [[时刻, [x, y, z]], …]，对焦点在镜头里一个个拉过去；滑过去的镜头怕擦着东西，写 arc: .06（米）往后让一点
+  //   MAGIC 的 panel 写 parts: [{ until: 'e02:词', kind: 'bigwords', … }, { kind: 'list', center: 1, … }]，板上分几段，到点交叉淡化
+  //   MAGIC 写 end: 'gather'，讲完照片缩回小机器人手心，不上墙
+  //   GLASS 宽高按字自动量；靠下的卡写 anchor: 'bottom'（底边钉在 y + h），minW 最小宽度，fit: false 用写死的 w、h
+  //   SCREEN 的 list 写 center: 1 整块居中、subSize 小字字号；bigwords 写 kSize、sSize 改上下两行小字的字号
+  //   KAKA 一条里写 act: 'nod' 点头、'shake' 摇头；FX3D 的字块写 off: 时刻，被推下桌
+
   // 柱状图的数字：从这一份导演表里数出来，改了表数字跟着变
   const bars = SCREEN.find((s) => s.kind === 'bars');
   bars.rows = [{ k: '镜头', v: CAM.length, at: 'b03+.4' }, { k: '屏幕', v: SCREEN.length, at: 'b03+.7' }, { k: '桌上的字块', v: FX3D.filter((x) => x.flat).length, at: 'b03+1.0' }, { k: '小机器人的动作', v: KAKA.length, at: 'b03:柱子', hl: 1 }];
   bars.max = Math.max(...bars.rows.map((r) => r.v)) * 1.15;
-  return { KAKA_AT, CAMS, SET, LIGHT, BLINDS, MAGIC, CALM, KAKA_LOOK, DATA, VOICE_ENV, CAM, SCREEN, KAKA, KAKA_IN, BOARD, FX3D, GLASS, STICK, HERO, TITLES, CHAPTERS, PROGRESS, CTA, FADES, NOSUB, BADGE, NOBADGE };
+  return { KAKA_AT, CAMS, SET, LIGHT, BLINDS, MAGIC, CALM, KAKA_LOOK, DATA, VOICE_ENV, CAM, SCREEN, KAKA, KAKA_IN, BOARD, FX3D, GLASS, STICK, PHONE, HOLO, NOTEBOOK, VISIT, HERO, TITLES, CHAPTERS, PROGRESS, CTA, FADES, NOSUB, BADGE, NOBADGE };
 }

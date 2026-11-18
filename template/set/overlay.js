@@ -94,9 +94,23 @@ export class Overlay {
     g.restore(); g.textAlign = 'left';
   }
 
-  // 磨砂信息卡：镜头离开屏幕的时候，重点写在这张卡上。x: { x, y, w, h（1920 设计稿）, kicker, title, lines: [{ text, at, hl, sub }], num, unit, img, blur }
+  // 磨砂卡的大小按字量出来：宽 = 最长那行 + 两边留白，高 = 最后一行 + 底边留白。手写的宽高一改字就对不上（框比字大一圈，或者字跑出框）。
+  // x.minW 最小宽度（默认 300）；x.fit === false 才用写死的 x.w、x.h
+  fitBox(g, x) {
+    if (x._fit) return x._fit; if (x.fit === false) return (x._fit = [x.w, x.h]);
+    let y = 70, R = 0, B = 0; const m = (f, s) => { g.font = f; return g.measureText(s).width; };
+    if (x.kicker) { R = Math.max(R, 34 + m(`600 26px ${SANS}`, x.kicker)); B = y + 14; y += 56; }
+    if (x.nlab) { R = Math.max(R, 54 + m(`500 28px ${SANS}`, x.nlab.text)); B = y + 16; y += 40; }
+    if (x.num) { g.font = `800 120px ${NUM}`; const nw = g.measureText(x.num).width; R = Math.max(R, 44 + nw + (x.unit ? m(`700 40px ${SANS}`, x.unit) : 0)); B = y + 90; y += 130; }
+    if (x.title) { const ts = x.tsize || 54; R = Math.max(R, 34 + m(`800 ${ts}px ${SERIF}`, x.title)); B = y + ts * .55; y += ts * 1.35; }
+    for (const L of x.lines || []) { R = Math.max(R, 36 + m(`${L.hl ? 700 : 600} ${L.size || 36}px ${SANS}`, L.text) + (L.hl ? 8 : 0)); B = y + 24;
+      if (L.sub) { R = Math.max(R, 36 + m(`500 24px ${SANS}`, L.sub)); B = y + 54; y += 30; } y += 62; }
+    return (x._fit = [Math.max(x.minW || 300, Math.ceil(R + 44)), Math.ceil(B + 36)]);
+  }
+  // 磨砂信息卡：镜头离开屏幕的时候，重点写在这张卡上。x: { x, y, w, h（1920 设计稿）, kicker, title, tsize, lines: [{ text, at, hl, sub, size }], num, unit, numAt, nlab, blur, fit, minW, anchor }
+  // 宽高按字自动量（fitBox），x、y 是左上角；anchor: 'bottom' 时底边钉在 y + h，卡往上长，靠下的卡用它，字多了也不压字幕
   panel(g, x, t) {
-    const a = Math.min(P(t, x.t0, .5), 1 - P(t, x.t1 - .45, .45)), e = easeOut(P(t, x.t0, .6)), X = x.x + (1 - e) * (x.from === 'left' ? -40 : 40), Y = x.y, Wd = x.w, H = x.h;
+    const [Wd, H] = this.fitBox(g, x), a = Math.min(P(t, x.t0, .5), 1 - P(t, x.t1 - .45, .45)), e = easeOut(P(t, x.t0, .6)), X = x.x + (1 - e) * (x.from === 'left' ? -40 : 40), Y = x.anchor === 'bottom' ? x.y + x.h - H : x.y;
     if (a <= 0) return; g.save(); g.globalAlpha = a;
     g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 40; g.fillStyle = 'rgba(0,0,0,.01)'; rr(g, X, Y, Wd, H, 26); g.fill(); g.shadowBlur = 0;
     this.frost(g, X, Y, Wd, H, 26, (x.blur ?? 22), .5);

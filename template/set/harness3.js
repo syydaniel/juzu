@@ -114,12 +114,16 @@ export class Stage {
     this.onLook?.(this); this.dirty = true;
   }
   // 在一个点上把四周拍下来当环境贴图。拍两遍：第二遍带着第一遍的结果，多算一次反弹。
+  // 拍之前先藏起会随时间变的东西（envHide：小机器人、飞的照片、全息、手机屏、热气、字块……），显示器换成固定的暗屏（envHooks，desk.js 登记）。
+  // 不藏的话，分块渲染时每块开头拍到的不一样，同一个镜头里每过一块亮度就跳一下，看着像「跳一下然后变暗」。
   captureEnv(pos, passes = 2) {
+    const hid = []; for (const o of this.envHide || []) if (o?.visible) { o.visible = false; hid.push(o); } for (const h of this.envHooks || []) h.pre?.();
     const s = this.scene, r = this.renderer; s.environment = null; this.pmrem ??= new THREE.PMREMGenerator(r);
     const crt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType }), cc = new THREE.CubeCamera(.05, 60, crt); cc.position.copy(pos);
     r.autoClear = true;
     for (let i = 0; i < passes; i++) { cc.update(r, s); const e = this.pmrem.fromCubemap(crt.texture).texture; this.env?.dispose(); this.env = e; s.environment = e; }
     r.autoClear = false; crt.dispose(); r.setRenderTarget(null);
+    for (const h of this.envHooks || []) h.post?.(); hid.forEach((o) => { o.visible = true; });
   }
 
   begin() { const r = this.renderer; r.setRenderTarget(this.rtA); r.setClearColor(0x000000, 0); r.clear(); this.count = 0; }
@@ -141,6 +145,10 @@ export class Stage {
     if (this.sun) { const { light, base, angR } = this.sun, d = base.clone().sub(light.target.position), len = d.length(); light.position.copy(base);
       if (L >= 4 && N > 1) { const u = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0)).normalize(), v = new THREE.Vector3().crossVectors(d, u).normalize();
         const rr = Math.sqrt(fr(.5 + i * .7548776662 + s1)) * Math.tan(angR) * len, a = fr(i * .5698402910 + s0) * 6.2832; light.position.addScaledVector(u, rr * Math.cos(a)).addScaledVector(v, rr * Math.sin(a)); } }
+    // 台灯、壁灯的灯泡有大小（lamps.js 登记在 stage.emit）。每个采样把整组灯在灯泡大小的球里挪一下，影子边就是软的；种子不随帧变，不闪
+    if (this.emit) for (const e of this.emit) { e.obj.position.copy(e.base);
+      if (L >= 4 && N > 1) { const z = 1 - 2 * fr(.5 + i * .7548776662 + s0), q = Math.sqrt(1 - z * z), a = i * 2.39996323 + s1 * 6.2832, rr = e.r * Math.cbrt(fr(.5 + i * .5698402910 + s1));
+        e.obj.position.x += rr * q * Math.cos(a); e.obj.position.y += rr * z; e.obj.position.z += rr * q * Math.sin(a); } }
     r.setRenderTarget(this.rtS); r.setClearColor(0x000000, 1); r.clear(); r.render(this.scene, cam);
     const u = this.accMat.uniforms; u.tC.value = this.rtS.texture; u.tD.value = this.rtS.depthTexture; u.P.value.copy(cam.projectionMatrix); u.PI.value.copy(cam.projectionMatrixInverse);
     u.ao.value = L >= 4 ? this.aoStrength : 0; u.seed.value = i;

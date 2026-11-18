@@ -12,6 +12,8 @@
 // 以后的段（from: 'wall'）照片已经在墙上了：描金边、胶带那头松开、下沿翘起、离墙、翻面，飞去拼板，最后再飞回墙上。
 // 照片墙的可见性只跟 t 走：第一段开始以前全部藏起来；第一段里每张照片从它冒出来那一刻起可见；第一段结束以后一直可见。没有任何悬浮段时照片墙一直在。
 // 一段至少 12 秒（起飞 1.7 秒，照片长出来到亮内容 5.6 秒，收回去 4.4 秒）。时间表在 plan() 里。
+// end: 'gather' 的段不上墙：讲完照片缩回一粒粒光点，飞回小机器人手心（适合放在前半段，照片墙留给后面那段第一次贴）。
+// VISIT（setVisits / visitAt）：小机器人飞到桌上别的地方办点事再飞回来，起落和悬浮段同一套弧线、推进光和前倾；笔记本那一段用（notebook.js）。
 import * as THREE from 'three';
 
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x)), lerp = (a, b, u) => a + (b - a) * u;
@@ -24,12 +26,12 @@ export const POUF = { x: 1.86, z: 2.30, r: .21, h: .36 };                 // 地
 // 板子默认：悬在小机器人头顶稍后（下沿离地约 0.77，小机器人头顶约 0.56），面朝 135°（书桌那个角），和床、前墙都成 45°；离前墙 0.5 米以上，离床边 0.24 米
 export const PANEL0 = { c: [1.78, 1.02, 2.33], yaw: 135, w: .9 };
 
-function glowTex() { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+export function glowTex() { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
   r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.18, 'rgba(255,255,255,.55)'); r.addColorStop(.45, 'rgba(255,255,255,.12)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 
 // 一堆细长的光条：每一根给两个端点，画成一根很细的圆柱（金线、火星、灰都用它）
-class Streaks {
+export class Streaks {
   constructor(parent, n, color, r = .0016) {
     this.mesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 5, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), n);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); this.mesh.frustumCulled = false; this.mesh.userData.fixed = true; this.mesh.castShadow = this.mesh.receiveShadow = false;
@@ -48,7 +50,7 @@ export class Magic {
   constructor(stage, film, set, bed, list, TX, draw) {
     this.stage = stage; this.film = film; this.draw = draw; const scene = stage.scene, g = this.g = new THREE.Group(); g.name = 'magic'; scene.add(g);
     this.ev = (list || []).map((m, i) => ({ ...m, t0: TX(m.t0), t1: TX(m.t1), from: m.from ?? (i === 0 ? 'air' : 'wall') })).sort((a, b) => a.t0 - b.t0);
-    this.air = this.ev.find((m) => m.from === 'air') || null;                    // 照片墙是哪一段「长」出来的
+    this.air = this.ev.find((m) => m.from === 'air' && m.end !== 'gather') || null;   // 照片墙是哪一段「长」出来的（end: 'gather' 的段收回小机器人手心，不上墙）
     this.wall = bed?.photos || null;
     const glow = this.glow = glowTex();
     // 坐墩：针织的圆墩，顶面微微鼓；落地时被压扁一下
@@ -82,7 +84,7 @@ export class Magic {
   }
   active(t) { return this.ev.find((m) => t >= m.t0 - .01 && t <= m.t1 + .01) || null; }
 
-  // 这一段的板子：中心、朝向、每一格的位置；照片排先后（air：离手心近的先长；wall：离小机器人近的先下墙）
+  // 这一段的板子：中心、朝向、每一格的位置；照片排先后（air：离小机器人手心近的先长；wall：离小机器人近的先下墙）
   build(m) {
     if (this.built === m) return; this.built = m; const pn = m.panel || {}, W = pn.w ?? PANEL0.w, H = W * 9 / 16, cols = this.wall.P.cols, rows = this.wall.P.rows;
     const c = V(pn.c || PANEL0.c), yaw = pn.face ? Math.atan2(pn.face[0] - c.x, pn.face[2] - c.z) : (pn.yaw ?? PANEL0.yaw) * Math.PI / 180;
@@ -96,7 +98,7 @@ export class Magic {
 
   // 一段的时间表（都相对 t0 / t1）。air：birth0 起每张照片在 spread 秒里依次冒出来；wall：lit0 起依次描金边、下墙
   plan(m) { const t0 = m.t0, t1 = m.t1, air = m.from === 'air';
-    return { air, fly0: t0, land: t0 + 1.7, wave: t0 + 1.9, float0: t0 + 2.2, birth0: t0 + 2.3, lit0: t0 + 2.5, spread: m.spread ?? (air ? 1.6 : 1.0), rise: .8, fly: 1.15,
+    return { air, gather: air && m.end === 'gather', fly0: t0, land: t0 + 1.7, wave: t0 + 1.9, float0: t0 + 2.2, birth0: t0 + 2.3, lit0: t0 + 2.5, spread: m.spread ?? (air ? 1.6 : 1.0), rise: .8, fly: 1.15,
       content: t0 + (air ? 5.6 : 6.0), unform: t1 - 4.4, rspread: 1.0, rfly: 1.4, settle: t1 - 2.6, back: t1 - 1.6, end: t1 }; }
   // 一张照片的几个时刻。air：B 冒出来、A 到位；wall：L 亮、Pk 松开、G 离墙、A 到位。回程：R0 起飞、RA 碰到墙、S 按好
   times(T, r) { const R0 = T.unform + r * T.rspread, RA = R0 + T.rfly, S = RA + .3;
@@ -105,6 +107,7 @@ export class Magic {
 
   // 小机器人这一刻在哪、朝哪、做什么姿势；不在这一段里就返回 null
   kaka(t, home) {
+    const vz = this.visitAt(t, home); if (vz) return vz;
     const m = this.active(t); if (!m) return null; const T = this.plan(m), perch = new THREE.Vector3(POUF.x, POUF.h + this.squash(t, T) + .004, POUF.z);
     const arc = (a, b, u, h) => { const p = a.clone().lerp(b, u); p.y += Math.sin(Math.PI * u) * h; return p; };
     let pos, thrust = 0, yaw = null, lean = 0;
@@ -113,10 +116,34 @@ export class Magic {
     else { pos = perch; if (t > T.land && t < T.land + .35) thrust = .5 * (1 - P(t, T.land, .35)); }
     // 姿势：起飞和回程举一只手（像超人）；air：落下后两手举过头顶，照片从手心上方一粒粒冒出来，拼好以后两手摊开讲；wall：先挥手
     // 每一段在两头各用 0.3 秒淡入淡出；挨着的两段正好交叉过渡（film.js 用 from / u 把两个姿势混起来）
-    const segs = [[T.fly0, T.land, 'pointUp'], ...(T.air ? [[T.wave, T.content - .2, 'cheer'], [T.content - .2, T.unform, m.pose ?? 'presentBoth']] : [[T.wave, T.wave + 1.2, 'wave'], [T.wave + 1.2, T.unform, m.pose ?? 'presentBoth']]), [T.back, T.end, 'pointUp']];
+    const segs = [[T.fly0, T.land, 'pointUp'], ...(T.air ? [[T.wave, T.content - .2, 'cheer'], [T.content - .2, T.gather ? T.unform - .1 : T.unform, m.pose ?? 'presentBoth'], ...(T.gather ? [[T.unform - .1, T.back, 'cheer']] : [])] : [[T.wave, T.wave + 1.2, 'wave'], [T.wave + 1.2, T.unform, m.pose ?? 'presentBoth']]), [T.back, T.end, 'pointUp']];
     const ws = segs.map(([a, b, name]) => ({ name, w: sm(P(t, a - .15, .3)) * (1 - sm(P(t, b - .15, .3))) })).filter((q) => q.w > .001);
     const pose = !ws.length ? null : ws.length === 1 ? ws[0] : { from: ws[0].name, name: ws[1].name, w: Math.min(1, ws[0].w + ws[1].w), u: ws[1].w / (ws[0].w + ws[1].w) };
     return { pos, thrust, yaw, lean, pose };
+  }
+  // 小机器人飞到桌上别的地方办点事再飞回来（导演表 VISIT：[{ t0, t1, to: [x, z], yaw, pose }]）。笔记本那一段用：落在本子右后方，
+  // notebook.aim(t) 有目标时抬手（point），光线从手心拉过去；没目标时摆 pose。起落用和悬浮段一样的弧线、推进光和前倾
+  setVisits(list, TX) { this.visits = (list || []).map((v) => ({ ...v, t0: TX(v.t0), t1: TX(v.t1) })); }
+  visitAt(t, home) {
+    for (const v of this.visits || []) { if (t < v.t0 - .01 || t > v.t1 + .01) continue;
+      const F = v.fly ?? 1.3, spot = new THREE.Vector3(v.to[0], home.y, v.to[1]), land = v.t0 + F, back = v.t1 - F, deg = (d) => Math.atan2(d.x, d.z) * 180 / Math.PI;
+      const arc = (a, b, u, h) => { const p = a.clone().lerp(b, u); p.y += Math.sin(Math.PI * u) * h; return p; };
+      let pos, thrust = 0, yaw = v.yaw ?? -60, lean = 0;
+      if (t < land) { const u = eio(P(t, v.t0, F)); pos = arc(home, spot, u, .2); thrust = Math.min(1, P(t, v.t0 - .15, .3)) * (1 - .6 * P(t, land - .25, .25)); yaw = deg(spot.clone().sub(home)); lean = 14 * Math.sin(Math.PI * u); }
+      else if (t > back) { const u = eio(P(t, back, v.t1 - back)); pos = arc(spot, home, u, .2); thrust = Math.min(1, P(t, back - .1, .25)) * (1 - P(t, v.t1 - .2, .2)); yaw = deg(home.clone().sub(spot)); lean = 14 * Math.sin(Math.PI * u); }
+      const nb = this.film.notebook, near = [-.3, -.2, -.1, 0, .1, .2, .3].map((d) => nb?.aim(t + d)), aimW = near.filter(Boolean).length / near.length;
+      if (!pos) { pos = spot.clone(); if (t < land + .35) thrust = .5 * (1 - P(t, land, .35)); const k = P(t, land, .45); yaw = lerp(deg(spot.clone().sub(home)), yaw, sm(k));
+        // 有目标时身子转向目标（前后 0.3 秒取平均，换目标时慢慢转过去），抬起的手才对得上光线
+        const hit = near.filter(Boolean); if (hit.length) { const c = hit.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / hit.length); yaw = lerp(yaw, deg(c.sub(pos)) + (v.aimOff ?? 0), sm(aimW)); } }
+      // 姿势：飞的时候举一只手；落地以后有目标就 point（前后 0.3 秒淡入淡出），没有就 v.pose
+      const fly = Math.max(sm(1 - P(t, land - .15, .3)) * (t < land + .2 ? 1 : 0), t > back - .15 ? sm(P(t, back - .15, .3)) : 0);
+      let pose = null;
+      if (fly > .001) pose = { name: 'pointUp', w: fly };
+      else if (aimW > .001) pose = v.pose ? { from: v.pose, name: 'reach', w: 1, u: sm(aimW) } : { name: 'reach', w: sm(aimW) };
+      else if (v.pose) pose = { name: v.pose, w: 1 };
+      return { pos, thrust, yaw, lean, pose };
+    }
+    return null;
   }
   squash(t, T) { const a = t - T.land, b = t - T.back; let s = 0; if (a > 0 && a < .6) s -= .035 * Math.exp(-a * 7) * Math.cos(a * 22); if (b > -.15 && b < .5) s -= .02 * Math.exp(-Math.max(0, b) * 7) * Math.sin(P(t, T.back - .15, .15) * Math.PI); return s; }
 
@@ -153,6 +180,13 @@ export class Magic {
           q = w.q.clone().slerp(qP, sm(P(u, .3, .6))).premultiply(new THREE.Quaternion().setFromAxisAngle(ax, Math.sin(Math.PI * e2) * (.35 + hash(cd.k, 11) * .4))); s = lerp(1, pn.sc, sm(u)); where = u < 1 ? 'fly' : 'panel'; }
         if (t >= k.L) e = t < k.A ? lerp(1.25, .7, P(t, k.L + .45, .6)) : lerp(1.2, .55, P(t, k.A, .5)) * (1 - .82 * P(t, T.content, .6));
       }
+    } else if (T.gather) {                                                                                                    // ---- 收回：金线倒着收、方块缩回一粒光点，再飞回小机器人手心（不上墙） ----
+      const a = P(t, k.R0, .6), g = 1 - eio(a), u = P(t, k.R0 + .5, .85); if (u >= 1) return { vis: false, k };
+      const h = H2[cd.k % 2].clone().add(new THREE.Vector3(0, .03, 0)), sd = hash(cd.k, 21) - .5;
+      const c2 = slot.clone().addScaledVector(pn.nrm, .05 + hash(cd.k, 23) * .06).add(new THREE.Vector3(0, -.08, 0)), c1 = h.clone().add(new THREE.Vector3(sd * .1, .18 + hash(cd.k, 22) * .08, 0));
+      p = slot.clone().addScaledVector(bob, 1); q = qP.clone(); s = pn.sc * (.1 + .9 * g); tr = g; tape = 0; op = 1 - sm(P(t, k.R0 + .1, .4));
+      e = lerp(.1, 1.3, sm(P(t, k.R0, .2))); where = a < 1 ? 'panel' : 'seed';
+      seed = sm(P(t, k.R0 + .35, .2)) * (1 - sm(P(u, .8, .2))); sp = u > 0 ? bez(slot, c2, c1, h, eio(u)) : slot.clone().addScaledVector(bob, 1);
     } else if (t < k.RA) {                                                                                                    // ---- 回程：翻到有画的一面，飞到墙前两厘米 ----
       const u = P(t, k.R0, T.rfly), e2 = eio(u), w = cd.pose(0, .02, { p: new THREE.Vector3(), q: new THREE.Quaternion() }), sd = (hash(cd.k, 12) - .5) * .5, st = slot.clone().add(bob);
       const c1 = st.clone().addScaledVector(pn.nrm, .25 + hash(cd.k, 13) * .2).add(new THREE.Vector3(0, .1 + sd * .2, 0)), c2 = w.p.clone().addScaledVector(nW, .3).add(new THREE.Vector3(sd * .3, .08, 0));
@@ -169,16 +203,23 @@ export class Magic {
   // 不在任何一段里的时候：照片在墙上的哪一格、看不看得见（只跟 t 走）
   idle(t) { const W = this.wall, show = !this.air || t > this.air.t1; for (const c of W.cards) { c.g.visible = show; if (this.dirty) { c.reset(); c.body.castShadow = true; } } W.back.mats.forEach((m) => { m.emissiveIntensity = 0; }); }
 
-  update(t, kakaPos, fast = false) {
-    const m = this.active(t), W = this.wall;
-    if (!m || !W) { this.g.visible = false; this.jets.forEach((s) => s.scale.set(1e-4, 1e-4, 1)); this.jetLight.intensity = this.wallLight.intensity = this.panelLight.intensity = this.handLight.intensity = 0; this.pouf.scale.set(1, 1, 1);
-      if (this.dirty) this.restore(); if (W) this.idle(t); this.dirty = false; return; }
-    this.dirty = true; this.g.visible = true; this.build(m); const T = this.plan(m), pn = this.panel;
-    // 1 推进
-    const kk = this.kaka(t, this.film.home), th = kk.thrust, fl = .85 + .15 * Math.sin(t * 61) * Math.sin(t * 37);
+  // 脚底推进：两团光、照地面的小灯、往下拖的细光（悬浮段和 visit 共用）
+  thrusters(t, kakaPos, th) {
+    const fl = .85 + .15 * Math.sin(t * 61) * Math.sin(t * 37);
     this.jets.forEach((s) => { const z = th * fl; s.scale.set(.5 * z + 1e-4, 1.1 * z + 1e-4, 1); s.material.opacity = Math.min(1, z * 1.5); });
     this.jetLight.position.copy(kakaPos).add(new THREE.Vector3(0, -.03, 0)); this.jetLight.intensity = th * fl * .5;
     this.trail.begin(); for (let i = 0; i < 30 && th > .05; i++) { const a = (i * .037 + t * 1.7) % 1, p0 = kakaPos.clone().add(new THREE.Vector3((hash(i, 9) - .5) * .03, -.02 - a * .12, (hash(i, 8) - .5) * .03)); this.trail.add(p0, p0.clone().add(new THREE.Vector3(0, -.015, 0)), th * (1 - a) * .45); } this.trail.end();
+  }
+  update(t, kakaPos, fast = false) {
+    const m = this.active(t), W = this.wall;
+    if (!m || !W) { const vz = this.visitAt(t, this.film.home);
+      if (vz) { this.g.visible = true; this.thrusters(t, kakaPos, vz.thrust); this.edge.begin(); this.edge.end(); this.dust.begin(); this.dust.end(); this.seeds.forEach((q) => { q.visible = false; });
+        this.wallLight.intensity = this.panelLight.intensity = this.handLight.intensity = 0; this.pouf.scale.set(1, 1, 1); if (this.dirty) this.restore(); if (W) this.idle(t); this.dirty = false; return; }
+      this.g.visible = false; this.jets.forEach((s) => s.scale.set(1e-4, 1e-4, 1)); this.jetLight.intensity = this.wallLight.intensity = this.panelLight.intensity = this.handLight.intensity = 0; this.pouf.scale.set(1, 1, 1);
+      if (this.dirty) this.restore(); if (W) this.idle(t); this.dirty = false; return; }
+    this.dirty = true; this.g.visible = true; this.build(m); const T = this.plan(m), pn = this.panel;
+    // 1 推进
+    const kk = this.kaka(t, this.film.home), th = kk.thrust; this.thrusters(t, kakaPos, th);
     const sq = this.squash(t, T); this.pouf.scale.y = 1 + sq / POUF.h * 2.2; this.pouf.scale.x = this.pouf.scale.z = 1 - sq / POUF.h * .9;
     // 2 东西浮起来
     const bounce = t > T.settle + 1.1 && t < T.settle + 1.6 ? .012 * Math.sin(P(t, T.settle + 1.1, .5) * Math.PI) * (1 - P(t, T.settle + 1.1, .5)) : 0;
@@ -189,20 +230,21 @@ export class Magic {
     });
     // 3、4 照片
     const H2 = T.air ? this.hands() : null;
+    const kx = 1 / Math.max(.4, this.stage.exposure || 1);   // 白天（曝光 .42）也要亮得起来；夜里曝光 1，不变
     this.edge.begin(); this.dust.begin(); let onWall = 0, onPanel = 0, off = 0, seeds = 0;
     for (const cd of W.cards) {
       const st = this.card(cd, t, T, H2), sd = this.seeds[cd.k];
       if (!st.vis) { cd.g.visible = false; sd.visible = false; continue; }
       cd.g.visible = st.op > .002; cd.g.position.copy(st.p); cd.g.quaternion.copy(st.q); cd.g.scale.setScalar(st.s); cd.fade(st.op); cd.tape(st.tape); cd.body.castShadow = st.op > .6;   // 还半透明的时候不投影
-      sd.visible = st.seed > .01; if (sd.visible) { sd.position.copy(st.sp ?? st.p); sd.scale.setScalar((.013 * st.seed + .003) * (1 + .12 * Math.sin(t * 19 + cd.k * 2.3))); sd.material.opacity = Math.min(1, st.seed * 1.4); seeds += st.seed; }
+      sd.visible = st.seed > .01; if (sd.visible) { sd.position.copy(st.sp ?? st.p); sd.scale.setScalar((.013 * st.seed + .003) * (1 + .12 * Math.sin(t * 19 + cd.k * 2.3))); sd.material.opacity = Math.min(1, st.seed * 1.4); sd.material.color.copy(WARM).multiplyScalar(kx); seeds += st.seed; }
       if (st.where !== 'wall') off++; if (st.e > 0) { if (st.where === 'wall') onWall += st.e; else if (st.where === 'panel') onPanel += st.e; }
       if (st.e > .003) { const hw = cd.s / 2, fz = Z.clone().applyQuaternion(st.q);                                         // 金线贴着纸边，往看得见的那一面挪出 0.6 毫米
         const C = [[-hw, -hw], [hw, -hw], [hw, hw], [-hw, hw]].map(([x, y]) => new THREE.Vector3(x, y, 0).multiplyScalar(st.s).applyQuaternion(st.q).add(st.p).addScaledVector(fz, st.where === 'panel' || (T.air && st.where === 'fly' && t < st.k.R0) ? -.0006 : .0006));
-        for (let e = 0; e < 4; e++) { const f = clamp(st.tr * 4 - e); if (f <= 0) break; const a = C[e], b = C[(e + 1) % 4]; this.edge.add(a, a.clone().lerp(b, f), st.e);
+        for (let e = 0; e < 4; e++) { const f = clamp(st.tr * 4 - e); if (f <= 0) break; const a = C[e], b = C[(e + 1) % 4]; this.edge.add(a, a.clone().lerp(b, f), st.e * kx);
           if (f < 1 && st.tr < 1 && !T.air) { const hd = a.clone().lerp(b, f); for (let s = 0; s < 2; s++) { const ph = (t * 7 + s * .5 + cd.k * .13) % 1, d = new THREE.Vector3(hash(cd.k * 7 + s, 41) - .5, -.3 - hash(cd.k * 7 + s, 42) * .5, hash(cd.k * 7 + s, 43) - .5).multiplyScalar(.03 * ph);
             this.edge.add(hd.clone().add(d), hd.clone().add(d.clone().multiplyScalar(1.4)), 1.4 * (1 - ph)); } } } }
       // 灰：从墙上揭下来那一刻抖下来几粒（只有 wall 段）；贴回墙上的时候扬起一点
-      for (const [t0, nN, sp] of T.air ? [[st.k.RA + .1, 2, .6]] : [[st.k.Pk + .1, 5, 1], [st.k.RA + .1, 2, .6]]) { const a = t - t0; if (a < 0 || a > 2.6) continue;
+      for (const [t0, nN, sp] of T.gather ? [] : T.air ? [[st.k.RA + .1, 2, .6]] : [[st.k.Pk + .1, 5, 1], [st.k.RA + .1, 2, .6]]) { const a = t - t0; if (a < 0 || a > 2.6) continue;
         for (let n = 0; n < nN; n++) { const life = 1.6 + hash(cd.k * 13 + n, 51) * 1.0; if (a > life) continue; const u = hash(cd.k * 13 + n, 52), side = n % 3;
           const p0 = cd.home.p.clone().add(new THREE.Vector3(side === 0 ? (u - .5) * cd.s : (side === 1 ? -1 : 1) * cd.s / 2, side === 0 ? -cd.s / 2 : (u - .5) * cd.s, 0).applyQuaternion(cd.qBase)).addScaledVector(cd.nW, .004);
           const v = cd.nW.clone().multiplyScalar((.03 + .06 * hash(cd.k * 13 + n, 53)) * sp).add(new THREE.Vector3((hash(cd.k * 13 + n, 54) - .5) * .04, -.025 - .02 * hash(cd.k * 13 + n, 55), 0));
@@ -212,7 +254,7 @@ export class Magic {
     // 灯：手心上方冒光点时的一点暖光；金线照墙；板子亮起来以后的面光
     if (H2) { this.handLight.position.copy(H2[0]).lerp(H2[1], .5).add(new THREE.Vector3(0, .08, 0)); this.handLight.intensity = .35 * Math.min(1, seeds / 3); } else this.handLight.intensity = 0;
     this.wallLight.position.copy(W.center).addScaledVector(W.nW, .3); this.wallLight.intensity = .42 * onWall / W.cards.length;
-    const cw = P(t, T.content, .6) * (1 - P(t, T.unform - .35, .35)); W.back.mats.forEach((mt) => { mt.emissiveIntensity = 1.1 * cw; });
+    const cw = P(t, T.content, .6) * (1 - P(t, T.unform - .35, .35)); W.back.mats.forEach((mt) => { mt.emissiveIntensity = 1.1 * cw * kx; });
     if (off && !fast) { const g = W.back.canvas.getContext('2d'); g.drawImage(W.back.paper, 0, 0); if (cw > 0) { g.save(); g.globalAlpha = cw; this.draw?.(g, 1600, 900, m.panel, t); g.restore(); } W.back.tex.needsUpdate = true; }
     this.panelLight.position.copy(pn.c).addScaledVector(pn.nrm, .45).add(new THREE.Vector3(0, -.25, 0)); this.panelLight.intensity = .65 * cw + .3 * onPanel / W.cards.length;
   }

@@ -1,4 +1,5 @@
-"""片场动作的声音：桌上掉字块、软木板上的纸展开、贴截图、立体卡翻出来、牌子升起来、图钉、小机器人跳进跳出屏幕。
+"""片场动作的声音：桌上掉字块、软木板上的纸展开、贴截图、立体卡翻出来、牌子升起来、图钉、小机器人跳进跳出屏幕；
+65 期加了：手机震动和翻面、全息屏打开、字块被推下桌、笔记本（笔滚开、松紧带、封面落下）、魔法方片收回手心（gather）。
   juzu.py events    → sfx/events.json（从导演表 set/shots.js 读出每个动作的时刻）
   juzu.py set_fx    → music/sfx_soft/<名字>.wav、out/sfx_set.wav（整片长度）和试听条 music/sfx_soft/_试听_set_fx.wav
 
@@ -99,6 +100,67 @@ def pin():
     return stereo(lp(x, 2200), rng.uniform(-.15, .15))
 
 
+def buzz():
+    """手机震两下（相隔 0.2 秒）：马达的低频嗡嗡加一点桌面的细小共振，很轻，没有高频。"""
+    n = int(.42 * SR); t = np.arange(n) / SR; x = np.zeros(n)
+    for c in (.0, .2):
+        m = (t >= c) & (t < c + .14); u = np.clip((t - c) / .14, 0, 1)
+        x += m * np.sin(np.pi * u) ** .6 * (np.sin(2 * np.pi * 172 * t) + .35 * np.sin(2 * np.pi * 344 * t + 1)) * (.7 + .3 * np.sin(2 * np.pi * 31 * t))
+    return stereo(lp(x, 1200), .12)
+
+
+def flip():
+    """手机翻面：一小口带通的气声（0.5 秒）抬起来，0.52 秒落回桌面——比字块轻、硬一点的「嗒」，再弹一下很小的。"""
+    n = int(1.0 * SR); x = np.zeros(n)
+    k = int(.5 * SR); w = bp(rng.standard_normal(k), 350, 1600); pos = np.linspace(0, 1, k); x[:k] += .45 * lp(w * np.sin(np.pi * pos) ** 2, 1800)
+    for c, a in ((.52, 1.0), (.66, .25)):
+        j = int(c * SR); h = tok(330)[:, 0][: n - j]; x[j:j + len(h)] += a * h
+    return stereo(lp(x, 2400), .1)
+
+
+def holo():
+    """全息屏打开：两个音（G4、D5）慢慢浮上来再散开，底下一层很薄的气声。像灯亮起来，不像提示音。"""
+    n = int(1.3 * SR); t = np.arange(n) / SR
+    x = sum(a * np.sin(2 * np.pi * f * t + rng.uniform(0, 6)) for f, a in ((392, 1), (393.2, .6), (587.3, .45), (588.6, .3)))
+    x = x * env(n, .16, .8, hold=.12, shape=1.4) + bp(rng.standard_normal(n), 500, 2000) * env(n, .1, .5) * .25
+    return stereo(lp(x, 2200), -.1)
+
+
+def pushoff():
+    """字块被推下桌：先在桌垫上擦着滑 0.55 秒（越来越快），过桌沿后约 0.4 秒落到地上，一声闷响（离得远，压得很低）。"""
+    n = int(1.4 * SR); x = np.zeros(n); k = int(.55 * SR)
+    w = bp(rng.standard_normal(k), 180, 900); x[:k] += .5 * w * np.linspace(.2, 1, k) ** 1.5 * env(k, .05, .08, hold=.4)
+    j = int(.94 * SR); h = tok(150)[:, 0]; h = lp(h, 700)[: n - j]; x[j:j + len(h)] += .8 * h
+    return stereo(lp(x, 1600), .2)
+
+
+def penroll():
+    """笔被光线拨开、在本子封面上滚 0.6 秒：一串越来越稀的小「咔」，底下一点点摩擦声。"""
+    n = int(.75 * SR); x = np.zeros(n); c = .0
+    for i in range(9):
+        j = int(c * SR); m = int(.03 * SR)
+        if j + m < n: x[j:j + m] += (1 - i / 11) * bp(rng.standard_normal(m), 700, 2200) * env(m, .002, .012)
+        c += .045 + .012 * i
+    x += .15 * bp(rng.standard_normal(n), 300, 1200) * env(n, .03, .3, hold=.35)
+    return stereo(lp(x, 2600), .15)
+
+
+def band():
+    """松紧带从封面滑下来：很短的一声「嘣」往下滑（260→170 Hz），软。"""
+    n = int(.22 * SR); t = np.arange(n) / SR; f = np.interp(t, [0, .12], [260, 170]); ph = 2 * np.pi * np.cumsum(f) / SR
+    x = np.sin(ph) * env(n, .008, .08, hold=.02) + .2 * bp(rng.standard_normal(n), 400, 1500) * env(n, .008, .03)
+    return stereo(lp(x, 1800), .1)
+
+
+def cover():
+    """本子封面翻过去落到桌上：硬纸板的一声闷「啪」，0.37 秒后弹一下很小的。"""
+    n = int(.8 * SR); x = np.zeros(n)
+    for c, a in ((0, 1), (.37, .22)):
+        j = int(c * SR); m = int(.3 * SR); h = (np.sin(2 * np.pi * 140 * np.arange(m) / SR) * env(m, .008, .06) * .8 + bp(rng.standard_normal(m), 200, 1400) * env(m, .008, .05))
+        x[j:j + m] += a * h[: n - j]
+    return stereo(lp(x, 1500), -.1)
+
+
 def rec(key, rank, d, cut, pan, e, alt):
     x = lib(key, rank, d, e)
     return stereo(lp(x if x is not None else alt(), cut), pan)
@@ -111,13 +173,16 @@ def build(e, out):
           'tape1': rec('tape', 2, .45, 2200, -.2, e, lambda: rustle(.45, 700, 2200)),
           'tape2': rec('card', 0, .45, 3000, .2, e, lambda: rustle(.45, 600, 2800)),
           'swish1': swish(True), 'swish2': swish(True, .36), 'swish3': swish(False, .4),
-          'hopin': hop(True), 'hopout': hop(False), 'rise': rise(), 'pin': pin()}
+          'hopin': hop(True), 'hopout': hop(False), 'rise': rise(), 'pin': pin(),
+          'buzz': buzz(), 'flip': flip(), 'holo': holo(), 'pushoff': pushoff(), 'penroll': penroll(), 'band': band(), 'cover': cover()}
     return finish(fx, out, REF)
 
 
 PICK = {'tok': ['tok1', 'tok2', 'tok3', 'tok4'], 'unroll': ['paper1', 'paper2'], 'stick': ['tape1', 'tape2'],
-        'card': ['swish1', 'swish2', 'swish3'], 'hopin': ['hopin'], 'hopout': ['hopout'], 'rise': ['rise'], 'pin': ['pin']}
-GAIN = {'tok': 0, 'unroll': -2, 'stick': -2, 'card': -3, 'hopin': 0, 'hopout': -2, 'rise': -2, 'pin': -3}
+        'card': ['swish1', 'swish2', 'swish3'], 'hopin': ['hopin'], 'hopout': ['hopout'], 'rise': ['rise'], 'pin': ['pin'],
+        'buzz': ['buzz'], 'flip': ['flip'], 'holo': ['holo'], 'pushoff': ['pushoff'], 'penroll': ['penroll'], 'band': ['band'], 'cover': ['cover'], 'gather': ['swish3']}
+GAIN = {'tok': 0, 'unroll': -2, 'stick': -2, 'card': -3, 'hopin': 0, 'hopout': -2, 'rise': -2, 'pin': -3,
+        'buzz': -3, 'flip': -2, 'holo': -4, 'pushoff': -3, 'penroll': -4, 'band': -4, 'cover': -2, 'gather': -4}
 
 
 def placed(E, C, ck):

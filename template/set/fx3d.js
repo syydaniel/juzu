@@ -53,7 +53,7 @@ function face(it) {
 
 export class FX3D {
   constructor(stage, list, TX, TOP = .74, MATTOP = .743) {
-    this.stage = stage; this.TOP = TOP; this.MATTOP = MATTOP; this.items = (list || []).map((x) => ({ ...x, t0: TX(x.t0 ?? x.at), t1: TX(x.t1), hl: x.hl !== undefined ? [].concat(x.hl).map(TX) : null, st: x.stand !== undefined ? TX(x.stand) : null }));
+    this.stage = stage; this.TOP = TOP; this.MATTOP = MATTOP; this.items = (list || []).map((x) => ({ ...x, t0: TX(x.t0 ?? x.at), t1: TX(x.t1), hl: x.hl !== undefined ? [].concat(x.hl).map(TX) : null, st: x.stand !== undefined ? TX(x.stand) : null, offT: x.off !== undefined ? TX(x.off) : null }));
     this.gold = new THREE.MeshStandardMaterial({ color: 0xd8a24a, metalness: .85, roughness: .32 });
     for (const it of this.items) {
       const { tex, ar, rough } = face(it); it.ar = ar;
@@ -109,6 +109,13 @@ export class FX3D {
         if (th) { const hh = it.scale / 2, off = new THREE.Vector3(0, hh * Math.sin(th), hh * (1 - Math.cos(th))).applyQuaternion(new THREE.Quaternion().setFromAxisAngle(it.up, it.yaw0 || 0)); g.position.add(off); }
         g.quaternion.copy(it.q).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler((1 - q) * D.rx + lift * .35 + th, rock, (1 - q) * D.rz + rock * .6)));
         if (t < tl) g.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(it.up, (1 - q) ** 2 * D.ry));
+        // off 写了时刻，这块就被推下桌：先抖一下（像不情愿），再往桌沿滑、越滑越快，过了桌沿往前翻着掉下去，掉出画面。桌子前沿在 z = 0.77
+        if (it.offT !== null && t >= it.offT - .28) {
+          const dt = t - it.offT, edge = .77 - it.base.z + .015, tE = .55, acc = 2 * edge / (tE * tE);
+          if (dt < 0) { const e = Math.sin(Math.PI * P(t, it.offT - .28, .28)); g.position.x += .0012 * e * Math.sin(dt * 2 * Math.PI * 22); }
+          else { const fT = Math.max(0, dt - tE); g.position.z += dt < tE ? .5 * acc * dt * dt : edge + acc * tE * fT; g.position.y -= 4.9 * fT * fT;
+            if (fT > 0) g.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.min(2.6, 7 * fT)));
+            if (g.position.y < this.TOP - .45) { g.visible = false; continue; } } }
         g.scale.setScalar(it.scale * Math.max(.001, 1 - out) * (1 + .08 * lift)); it.mats[1].emissiveIntensity = it.glow0 + glow * .5; it.mats[0].emissive?.setHex(glow > 0 ? 0x6a4510 : 0); if (it.mats[0].emissive) it.mats[0].emissiveIntensity = glow;
         it.mats.forEach((m) => { m.opacity = 1; m.depthWrite = true; }); continue; }
       if (it.pos) {                                      // 桌上的牌子：从桌面里升起来，最后沉回去，不晃

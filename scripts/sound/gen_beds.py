@@ -7,6 +7,16 @@
 铺底默认在描述后面加一句「平缓、没有鼓、没有拍子、给旁白让路」（calm，可以在这段里写 "calm": false 关掉）。
 写长段会撞上 ACE-Step 自带的 600 秒生成超时（64 期写 220 秒那段时进程崩了），这里默认放宽到 3600 秒。
 
+65 期作者听出刺耳的高音（11-18）。查下来是 ACE-Step 生成时自带固定频率的哨音和一层不跟音乐走的高频底噪，跟描述有关：
+celesta、music box、harp、guitar harmonics、hall、distant、spacious、airy、nostalgic 这类词会把亮、散的质感拉进来，
+「no drums, no beat…」重复提这些词反而加强它们。所以：
+  - 描述写成官方例子那样的整句：中低音区、持续音的乐器（钢琴、Rhodes、大提琴、低音弦乐、圆号、暖 pad），加 warm, lush, high-fidelity,
+    studio-polished, mellow rounded highs, short natural room reverb；不写 no X 列表（calm 默认关）。
+  - 生成：guidance 5（官方说调高会刺耳）、velocity_norm_threshold 2、velocity_ema_factor 0.1、cfg_interval_start 0.2（最后几步细节不加 CFG）、
+    规划模型不改写描述（use_cot_caption False）、负面提示写噪声和刺耳的高音；种子真正固定（use_random_seed False），输出 32 位 wav。
+  - 一段别超过 240 秒（官方说纯音乐 30 到 180 秒最好），长的在 plan 里拆成两截交叉淡化（xf_in / xf_out）。
+每段也可以单独覆盖：guidance、steps、model、cfg_interval_start、velocity_norm_threshold、velocity_ema_factor。
+
 cues.json 的 beds 写法：
   "explain": {"bpm": 70, "key": "F major", "dur": "auto", "seeds": [4101, 4102],
               "caption": "Gentle, beautiful ambient piano underscore: …", "lyrics": "[Intro]\\n[Instrumental]\\n…"}"""
@@ -17,9 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _snd import ep, cfg, cues, Clock, log  # noqa: E402
 
 MODEL, LM, STEPS = 'acestep-v15-xl-sft', 'acestep-5Hz-lm-4B', 50
-CALM = (' Real acoustic instruments recorded in a quiet hall, pristine high-fidelity, warm, soft and spacious, natural reverb, wide stereo.'
-        ' Slow and flowing, rubato, no drums, no percussion, no beat, no pulse, no bass groove, no vocals.'
-        ' Gentle underscore that sits quietly under a narrator, no sudden changes.')
+CALM = (' Beatless, slow and even in level, sitting quietly under a narrator. High-fidelity, studio-polished production:'
+        ' a warm, lush, close mix with rich low-mids, mellow rounded highs and a short natural room reverb.')   # 11-18：不再写 no X 和 hall / spacious
+NEG = 'lo-fi noisy recording, tape hiss, vinyl crackle, harsh bright treble, whistling tones, drums, percussion, vocals'
 LYRICS = '[Intro]\n[Instrumental]\n[soft opening]\n\n[Verse]\n[gentle theme]\n\n[Bridge]\n[a little warmer, still calm]\n\n[Outro]\n[quiet ending]'
 
 
@@ -76,11 +86,16 @@ if __name__ == '__main__':
             if ck is None:
                 sys.exit(f'{name} 的 dur 是 auto，但还没有时间线（app/src/timeline.json）：先配音，或者写一个秒数')
             dur = need_dur(name, C.get('plan', []), ck)
-        cap = b['caption'] + (CALM if b.get('calm', True) else '')
+        cap = b['caption'] + (CALM if b.get('calm', False) else '')
+        if int(dur) > 240:
+            print(f'注意：{name} 要写 {dur} 秒，超过 240 秒质量会掉，最好在 plan 里拆成两截', flush=True)
         p = dict(task_type='text2music', thinking=True, caption=cap, lyrics=b.get('lyrics', LYRICS), bpm=int(b.get('bpm', 70)),
                  keyscale=b.get('key', 'C major'), timesignature='4', vocal_language='unknown', duration=int(dur),
-                 inference_steps=STEPS, guidance_scale=7.0, shift=3.0, seed=seed, instrumental=True)
-        r = generate_music(dit, lm, params=GenerationParams(**p), config=GenerationConfig(batch_size=1, audio_format='wav'), save_dir=str(OUT / 'raw'))
+                 inference_steps=int(b.get('steps', STEPS)), guidance_scale=float(b.get('guidance', 5.0)), shift=3.0, seed=seed,
+                 cfg_interval_start=float(b.get('cfg_interval_start', 0.2)), velocity_norm_threshold=float(b.get('velocity_norm_threshold', 2.0)),
+                 velocity_ema_factor=float(b.get('velocity_ema_factor', 0.1)), use_cot_caption=False, lm_negative_prompt=b.get('negative', NEG))
+        r = generate_music(dit, lm, params=GenerationParams(**p),
+                           config=GenerationConfig(batch_size=1, use_random_seed=False, seeds=[seed], audio_format='wav32'), save_dir=str(OUT / 'raw'))
         dt = round(time.time() - t0); tag = f'{name}_{seed}'
         print(tag, '成功' if r.success else '失败', dt, '秒', '' if r.success else r.status_message, flush=True)
         if r.success and r.audios:

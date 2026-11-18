@@ -125,10 +125,15 @@ export function table(g, w, h, it, t) {
   if (it.note) { g.font = `500 ${20 * s}px ${SANS}`; g.fillStyle = C.dim; g.fillText(it.note, X, h - 46 * s); }
 }
 
-// ---------- 清单：一条一条亮起来。it: { title, items: [{ text, sub, at, hl, strike, fix }], big, num, lhead }
-// hl：这个时刻荧光笔从左往右扫过这一条；strike：这个时刻划掉；fix：划掉以后跟在后面出现的新写法（金色） ----------
+// ---------- 清单：一条一条亮起来。it: { title, items: [{ text, sub, at, hl, strike, fix }], big, subSize, num, lhead, center }
+// hl：这个时刻荧光笔从左往右扫过这一条；strike：这个时刻划掉；fix：划掉以后跟在后面出现的新写法（金色）
+// center: 1 整块清单在画面里横向居中（悬浮段的板上用：不然字只占左边三分之一，右边一大片空着）；subSize 小字字号（默认 22） ----------
 export function list(g, w, h, it, t) {
-  const A = chrome(g, w, h, it.title, it.sub), s = A.s, X = 90 * s, n = it.items.length, gap = Math.min(150, (A.h / s - 120) / n);
+  const A = chrome(g, w, h, it.title, it.sub), s = A.s, n = it.items.length, gap = Math.min(150, (A.h / s - 120) / n);
+  let X = 90 * s;
+  if (it.center) { let mw = 0; for (const q of it.items) { g.font = `700 ${(it.big || 38) * s}px ${SANS}`; mw = Math.max(mw, g.measureText(q.text).width);
+      if (q.sub) { g.font = `500 ${(it.subSize || 22) * s}px ${SANS}`; mw = Math.max(mw, g.measureText(q.sub).width); } }
+    X = Math.max(90 * s, (w - (mw + 52 * s)) / 2); }
   let y = A.y + 90 * s; g.textBaseline = 'middle';
   if (it.lhead) { g.font = `700 ${40 * s}px ${SANS}`; g.fillStyle = C.text; g.fillText(it.lhead, X, y); y += 80 * s; }
   it.items.forEach((q, i) => { const on = P(t, TX0(q.at ?? it.t0), .4), cur = i === it.items.findLastIndex((z) => t >= TX0(z.at ?? it.t0)), u = easeOut(on);
@@ -141,7 +146,7 @@ export function list(g, w, h, it, t) {
     g.fillStyle = on > 0 ? (su > 0 ? `rgba(236,234,228,${1 - .5 * su})` : C.text) : '#5a5e6b'; g.fillText(q.text, X + 52 * s, y);
     if (su > 0) { g.strokeStyle = C.red; g.lineWidth = 5 * s; g.beginPath(); g.moveTo(X + 46 * s, y + 2 * s); g.lineTo(X + 46 * s + (tw + 14 * s) * su, y - 3 * s); g.stroke(); }
     if (q.fix && su >= 1) { const fu = easeOut(P(t, TX0(q.strike) + .4, .45)); g.save(); g.globalAlpha *= fu; g.fillStyle = C.gold; g.font = `700 ${(it.big || 38) * s}px ${SANS}`; g.fillText('→ ' + q.fix, X + 52 * s + tw + 36 * s + (1 - fu) * 24 * s, y); g.restore(); }
-    if (q.sub) { g.font = `500 ${22 * s}px ${SANS}`; g.fillStyle = C.dim; g.fillText(q.sub, X + 52 * s, y + 42 * s); }
+    if (q.sub) { const ss = it.subSize || 22; g.font = `500 ${ss * s}px ${SANS}`; g.fillStyle = C.dim; g.fillText(q.sub, X + 52 * s, y + (20 + ss) * s); }
     g.restore(); y += gap * s; });
 }
 
