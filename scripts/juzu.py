@@ -71,7 +71,8 @@ def main():
         run = ['node', str(p), *args]
     else:
         run = ['sh', str(p), *args]
-    env = dict(os.environ, PYTHONPATH=str(HERE) + os.pathsep + os.environ.get('PYTHONPATH', ''))
+    # PYTHONUTF8：后台、定时任务里常常没有 UTF-8 的 locale，open() 默认成 ascii，写中文就崩（65 期出片时崩在写运行记录）
+    env = dict(os.environ, PYTHONUTF8='1', PYTHONPATH=str(HERE) + os.pathsep + os.environ.get('PYTHONPATH', ''))
     sys.exit(subprocess.call(run, env=env))
 
 

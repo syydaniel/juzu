@@ -119,6 +119,24 @@ PICK = {'tok': ['tok1', 'tok2', 'tok3', 'tok4'], 'unroll': ['paper1', 'paper2'],
         'card': ['swish1', 'swish2', 'swish3'], 'hopin': ['hopin'], 'hopout': ['hopout'], 'rise': ['rise'], 'pin': ['pin']}
 GAIN = {'tok': 0, 'unroll': -2, 'stick': -2, 'card': -3, 'hopin': 0, 'hopout': -2, 'rise': -2, 'pin': -3}
 
+
+def placed(E, C, ck):
+    """真正会出声的动作（发布时的耳听清单也用这一份）：导演表读出来的加上 extra，去掉 off 的，
+    同一刻落下的同种动作（比如箭头和后面那个字块）并成一声。两声叠起来会比别处响 3 dB 以上（65 期）。"""
+    evp = E / 'sfx/events.json'
+    ev = json.load(open(evp)) if evp.exists() else []
+    ev += [{'t': ck.at(x['at']), 'kind': x['kind'], 'text': x.get('text', '')} for x in C.get('extra', [])]
+    off = set(C.get('off', [])); prev = {}; out = []; merged = 0
+    for x in sorted(ev, key=lambda x: x['t']):
+        if x['kind'] in off or x['kind'] not in PICK:
+            continue
+        if x['t'] - prev.get(x['kind'], -9) < 0.06:
+            merged += 1
+            continue
+        prev[x['kind']] = x['t']; out.append(x)
+    return out, merged
+
+
 if __name__ == '__main__':
     E = ep(); C = cues(E).get('set_fx', {}); OUT = E / 'music/sfx_soft'
     done = build(E, OUT)
@@ -126,15 +144,10 @@ if __name__ == '__main__':
         print('没找到这些录音，用噪声代替了（音色会差一点）：', sorted(set(MISSING)))
     audition(list(done.items()), OUT / '_试听_set_fx.wav')
     ck = Clock(E); N = int((ck.tl['duration'] + 1) * SR); out = np.zeros((N, 2), np.float32); last = {}; cnt = {}
-    evp = E / 'sfx/events.json'
-    ev = json.load(open(evp)) if evp.exists() else []
-    if not evp.exists():
+    if not (E / 'sfx/events.json').exists():
         print('没有 sfx/events.json（先跑 juzu.py events）；只摆 cues.json 里 set_fx.extra 的动作')
-    ev += [{'t': ck.at(x['at']), 'kind': x['kind'], 'text': x.get('text', '')} for x in C.get('extra', [])]
-    gain = {**GAIN, **C.get('gain', {})}; off = set(C.get('off', []))
-    for x in sorted(ev, key=lambda x: x['t']):
-        if x['kind'] in off or x['kind'] not in PICK:
-            continue
+    ev, merged = placed(E, C, ck); gain = {**GAIN, **C.get('gain', {})}
+    for x in ev:
         names = PICK[x['kind']]; k = last.get(x['kind'], -1) + 1; last[x['kind']] = k
         a = done[names[k % len(names)]] * 10 ** (gain[x['kind']] / 20)
         j = int(x['t'] * SR)
@@ -143,6 +156,6 @@ if __name__ == '__main__':
         out[j:j + len(a)] += a[: N - j].astype(np.float32); cnt[x['kind']] = cnt.get(x['kind'], 0) + 1
     write(E / 'out/sfx_set.wav', out, SR, 'PCM_24')
     pk = round(float(20 * np.log10(np.abs(out).max() + 1e-9)), 1)
-    msg = f'片场动作声 {sum(cnt.values())} 处 {cnt} → out/sfx_set.wav，峰值 {pk} dB；基准 {REF} LUFS 瞬时'
+    msg = f'片场动作声 {sum(cnt.values())} 处 {cnt} → out/sfx_set.wav，峰值 {pk} dB；基准 {REF} LUFS 瞬时' + (f'；同一刻的 {merged} 处并成一声' if merged else '')
     print(msg); print('试听条 music/sfx_soft/_试听_set_fx.wav。新加的声音先单独听过再混。')
     log(E, '5-拟音', msg + (f'；缺录音 {sorted(set(MISSING))}，用噪声代替' if MISSING else ''))

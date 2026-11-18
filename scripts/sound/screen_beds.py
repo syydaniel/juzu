@@ -6,7 +6,7 @@
   频宽kHz   85% 的能量在这个频率以下，太低就闷（旧的 turbo 开场 85% 的能量在 100 Hz 以下）
   人声带    1 到 4 kHz 的能量占比（%），铺底在这里越少越不抢人声；30 以上提醒（close_3102 是 37）
   高频毛刺  8 kHz 以上能量逐帧抖动的程度，低步数常见的沙沙声会让它偏高；0.8 以上提醒（now_3101 是 1.08，turbo 开场 1.51）
-  断掉秒    中途响度掉到 -50 dB 以下的总秒数（结尾 3 秒不算）；4 秒以上提醒（开场 B1 是 7.7，第 22 秒断掉；
+  断掉秒    中途响度掉到 -50 dB 以下的总秒数（结尾 3 秒和结尾连着的淡出不算）；4 秒以上提醒（开场 B1 是 7.7，第 22 秒断掉；
             选中的铺底也有 1 到 3 秒，安静的长音本来就会掉下去）
   突变次数  1 秒内响度跳 9 dB 以上的次数；循环感：响度包络在 4 到 20 秒间隔上的最大自相关。这两个只在同一段的候选之间比，
             不做提醒：64 期选中的 toy_4101 突变 185 次，比淘汰的 toy_3101（138）还多，安静、有呼吸的铺底这个数天然就大
@@ -41,7 +41,12 @@ def bed_metrics(f):
     hf = S[:, fr > 8000].sum(1); jitter = float(np.mean(np.abs(np.diff(hf))) / (np.mean(hf) + 1e-9))
     body = db[: max(1, len(db) - 30)]; sm = np.convolve(body, np.ones(5) / 5, 'same')
     jumps = int(sum(1 for i in range(len(sm) - 10) if sm[i + 10] - sm[i] > 9))
-    gap = float(np.sum(body[30:] < -50) / 10)
+    run, cut = 0, len(db)   # 从后往前找最后一段连着 1 秒有声的地方，那以后算淡出，不算断（65 期三条候选因此被误报）
+    for i in range(len(db) - 1, -1, -1):
+        run = run + 1 if db[i] >= -50 else 0
+        if run >= 10:
+            cut = i + 10; break
+    gap = float(np.sum(db[30: min(cut, len(db) - 30)] < -50) / 10)
     env = sm - sm.mean()
     lags = range(40, min(200, len(env) // 2), 5)
     ac = max((float(np.corrcoef(env[:-l], env[l:])[0, 1]) for l in lags), default=0.0)

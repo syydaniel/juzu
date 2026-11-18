@@ -179,9 +179,10 @@ def ear_list(E, C, ck, TL, rep):
                         for s in segs)
         must.append((t0, f"**{mmss(t0)}–{mmss(t0 + float(A['dur']))} 环境声 {name}**：{desc}。环境声比配乐低 {A.get('under_music', 7)} LU。"
                          '听两件事：是不是刚好垫在音乐底下、不抢；切画面时跟着一起换，会不会突兀。'))
-    ev_p = E / 'sfx/events.json'
-    if ev_p.exists() and (E / 'out/sfx_set.wav').exists():
-        ev = [x for x in json.load(open(ev_p)) if x['kind'] not in set(C.get('set_fx', {}).get('off', []))]
+    ev = []
+    if (E / 'out/sfx_set.wav').exists():
+        from set_fx import placed   # 和 set_fx 摆声音用同一份：加上 extra、去掉 off、同一刻的并成一声
+        ev, _ = placed(E, C.get('set_fx', {}), ck)
         if ev:
             ts = sorted(x['t'] for x in ev)
             best = max(ts, key=lambda t: sum(1 for u in ts if t <= u < t + 10))
@@ -213,7 +214,6 @@ def ear_list(E, C, ck, TL, rep):
             out.append('铺底配乐在这几处换段：' + '、'.join(mmss(t) for t in changes) + '。听有没有突兀、有没有一下子断掉。')
         if airs:
             out.append('章节开头的气声：' + '、'.join(mmss(t) for t in airs) + '。')
-    ev = json.load(open(ev_p)) if ev_p.exists() else []
     if ev:
         c = {}
         for x in ev:
@@ -309,5 +309,12 @@ if __name__ == '__main__':
     for p in problems:
         print('  -', p)
     print('停点：把发布包交给用户。不要替用户上传或发布。')
-    log(E, '7-宣发', f'发布包 {len(have)} 个文件，问题 {len(problems)} 个' + (f'：{problems[:3]}' if problems else ''))
+    # 运行记录会拷进发布包、下次还要被扫：这里写进去的问题不能带禁用字、本机路径和私人字词，不然自己报自己（65 期）
+    def safe(p):
+        for w in banned:
+            p = p.replace(f'「{w}」', '')
+        for w in private:
+            p = p.replace(w, '~' if w == home else '＊')
+        return p
+    log(E, '7-宣发', f'发布包 {len(have)} 个文件，问题 {len(problems)} 个' + (f'：{[safe(p) for p in problems[:3]]}' if problems else ''))
     sys.exit(1 if problems else 0)
