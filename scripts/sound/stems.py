@@ -38,7 +38,7 @@ for name, A in C.get('ambience', {}).items():
     p = E / f'music/amb/{name}.wav'
     if not p.exists():
         sys.exit(f'cues.json 里有环境声 {name}，但没有 music/amb/{name}.wav：先跑 juzu.py ambience')
-    t0 = CK.at(A.get('at', 0)); d = float(A['dur'])
+    t0 = CK.at(A.get('at', 0)); d = CK.at(A['dur']) - t0 if isinstance(A['dur'], str) else float(A['dur'])   # dur 可以写时间写法（DUR）
     if t0 >= DUR:
         continue
     # 量响度时去掉头尾的淡入淡出：头 1.5 秒、尾 2 秒

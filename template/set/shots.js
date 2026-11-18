@@ -1,3 +1,4 @@
+import { smooth } from './smooth.js';
 // 导演表：这一期每一秒做什么。按口播的顺序写，时间尽量写成词，少写秒数。全部写法见 skill 里的 reference/导演表.md。
 // 时间写法：'c05'（这句开始）、'c05$'（这句结束）、'c05:关键词'（念到这个词）、'c05:关键词+0.4'、数字秒、'END'（片尾卡）、'DUR'（全片结束）。
 // 这一份是演示：十一句口播，带着观众逛一遍片场（显示器、桌面和主持小机器人、软木板、床角），每一种东西都用到一次。新的一期从这里改起。
@@ -35,7 +36,7 @@ export default function ({ TX, TL }) {
 
   // ---------- 镜头 ----------
   // d 是从上一个镜头滑过来用几秒，0 = 硬切。scr：对着屏幕上 (u, v)，dist 米外；写 u2 / v2 / dist2 / yaw2 就在镜头时长里跟着内容移过去
-  const FULL = { cam: 'scr', u: .5, v: .5, dist: .95, mm: 50 };
+  const FULL = { cam: 'scr', u: .5, v: .5, dist: .95, mm: 50, full: 1 };     // full：整屏镜头，smooth() 会让它不压字幕
   const JUMP = { cam: 'scr', u: .78, v: .75, dist: 1.2, yaw: 14, pitch: 6, mm: 35, creep: 0 };   // 屏幕和右边的小机器人都在画里：它跳进去、跳出来的时候用
   const at = (a, o) => ({ at: a, ...o });
   const CAM = [
@@ -58,7 +59,7 @@ export default function ({ TX, TL }) {
     at('e01', { cam: 'room', d: 0, drift: [-.01, 0, -.012], move: 0 }),
     at('e01:天一黑', { cam: 'bedwide', d: 0, move: { push: .05 } }),
     // 悬浮段（MAGIC 在下面）：全屋看它起飞 → 硬切大光圈近景看照片长出来 → 照片回墙前软切 1.4 秒，拉远加拉焦到墙上
-    at('e02-.3', { cam: 'room', d: 0, drift: [-.01, 0, -.01], move: 0 }),
+    at('e02-.3', { keep: 1, cam: 'room', d: 0, drift: [-.01, 0, -.01], move: 0 }),   // keep：短，但要看清它起飞，smooth() 别并掉
     at('e02+2.2', { cam: 'magic', d: 0, move: 0 }),
     at('e02$-2.6', { cam: 'magicwall', d: 1.4, move: 0 }),
     at('e03', { cam: 'wide', d: 0, drift: [-.012, -.004, -.02], move: 0 }),
@@ -181,5 +182,7 @@ export default function ({ TX, TL }) {
   const bars = SCREEN.find((s) => s.kind === 'bars');
   bars.rows = [{ k: '镜头', v: CAM.length, at: 'b03+.4' }, { k: '屏幕', v: SCREEN.length, at: 'b03+.7' }, { k: '桌上的字块', v: FX3D.filter((x) => x.flat).length, at: 'b03+1.0' }, { k: '小机器人的动作', v: KAKA.length, at: 'b03:柱子', hl: 1 }];
   bars.max = Math.max(...bars.rows.map((r) => r.v)) * 1.15;
+  // 运镜顺滑（smooth.js）：同机位连切并掉、短镜头不来回切、同一区域滑过去；换光的那几刀保持硬切。放在 LIGHT 写完以后
+  smooth(CAM, TX, TL.duration, CAMS, { cuts: (Array.isArray(LIGHT) ? LIGHT : []).filter((l) => l.at !== 0).map((l) => l.at) });
   return { KAKA_AT, CAMS, SET, LIGHT, BLINDS, MAGIC, CALM, KAKA_LOOK, DATA, VOICE_ENV, CAM, SCREEN, KAKA, KAKA_IN, BOARD, FX3D, GLASS, STICK, PHONE, HOLO, NOTEBOOK, VISIT, HERO, TITLES, CHAPTERS, PROGRESS, CTA, FADES, NOSUB, BADGE, NOBADGE };
 }

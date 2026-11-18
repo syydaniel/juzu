@@ -35,6 +35,8 @@ for (const k of S.KAKA_IN || []) { ev.push({ t: TX(k.t0) - .8, kind: 'hopin' });
 for (const it of S.FX3D || []) if (it.off !== undefined) ev.push({ t: TX(it.off), kind: 'pushoff', text: it.text });   // 字块被推下桌：滑 0.55 秒、过桌沿、约 0.4 秒后落地（fx3d.js）
 for (const p of S.PHONE || []) { const a = TX(p.at); ev.push({ t: a - .57, kind: 'buzz' }); ev.push({ t: a, kind: 'flip' });   // 手机：先震两下（a-.5、a-.3），再翻过来、a+.52 落回桌面（phone.js）
   if (p.back !== undefined) { ev.push({ t: TX(p.back) - .57, kind: 'buzz' }); ev.push({ t: TX(p.back), kind: 'flip' }); } }
+for (const a of S.PAD?.hop || []) ev.push({ t: TX(a) + .42, kind: 'tok', text: '手柄落回桌面' });          // 桌上的手柄被「扔」：蹦起来，0.42 秒落回桌面（pad.js）
+for (const r of S.PAD?.rumble || []) ev.push({ t: TX(Array.isArray(r) ? r[0] : r), kind: 'buzz' });           // 手柄震一下（中间的钮亮不出声）
 for (const h of S.HOLO || []) ev.push({ t: TX(h.t0), kind: 'holo', text: h.kicker || '' });                 // 全息屏打开（holo.js）
 for (const n of S.NOTEBOOK || []) { const a = TX(n.at);                                                    // 笔记本（notebook.js 的 plan）：笔滚开、皮筋滑掉、封面落到桌上弹一下
   ev.push({ t: a + .12, kind: 'penroll' }); ev.push({ t: a + .75, kind: 'band' }); ev.push({ t: a + 2.05, kind: 'cover' }); }

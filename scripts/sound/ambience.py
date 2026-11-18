@@ -28,6 +28,7 @@ cues.json 的写法（一段画面一个 clip，时间是这段画面里的秒�
   可选 highpass / lowpass（Hz）、semitones（变调，正数升、负数降，长度不变）、
   distance [[秒, 米], …]（秒是相对这段切点的时间；主体到镜头的距离，按它做音量和高频：远处闷、近了亮）、
   hits [{"at": 相对切点的秒, "src": 录音里的第几秒, "len": 0.7, "gain": 0.5}]（一下一下的点缀，不是连续铺）。
+dur、from、to 也可以写时间写法（"d01"、"f03-0.2"、"DUR"），按片子里的绝对时刻换算成这段里的秒数（减去 at）；数字照旧是段内秒数。
 切点处跟画面一起硬切（40 毫秒交叉），下一段提前 pre 秒（默认 0.2）开始淡入；第一段 pre 是 0，不然开头会空一下。
 整段最后 fade_out 秒（默认 2）淡出，统一到 lufs（默认 -24 LUFS）。在分轨里再摆到比配乐低 under_music 个 LU（默认 7），见 stems.py。"""
 import json, subprocess, sys
@@ -36,7 +37,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _snd import SR, ep, cues, write, find_lib, search_lib, lib_dirs, log  # noqa: E402
+from _snd import SR, ep, cues, write, find_lib, search_lib, lib_dirs, log, Clock  # noqa: E402
 
 PRE, TAIL = 0.2, 0.04
 NEAR, FAR = (9.0, 9000.0), (140.0, 1100.0)   # 距离 → 高频截止：9 米 9 kHz，140 米 1.1 kHz（64 期按沙漠里冲过来的车调的）
@@ -167,7 +168,11 @@ if __name__ == '__main__':
     AMB = {k: v for k, v in AMB.items() if isinstance(v, dict) and 'segments' in v and (only is None or k == only)}
     if not AMB:
         sys.exit('cues.json 里没有 ambience（写法见这个脚本开头的说明）')
+    CK = None
     for name, A in AMB.items():
+        if any(isinstance(v, str) for v in [A.get('dur')] + [sg.get(k) for sg in A['segments'] for k in ('from', 'to')]):   # 66 号：时间写法
+            CK = CK or Clock(E); t0 = CK.at(A.get('at', 0)); rel = lambda v: CK.at(v) - t0 if isinstance(v, str) else v
+            A = {**A, 'dur': rel(A['dur']), 'segments': [{**sg, **{k: round(rel(sg[k]), 3) for k in ('from', 'to') if k in sg}} for sg in A['segments']]}
         print(f'{name}：{A["dur"]} 秒，放在片子的 {A.get("at", "0")}')
         try:
             I, g = clip(name, A, E)

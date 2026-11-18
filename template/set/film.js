@@ -7,6 +7,7 @@ import { makeRig, applyState, STATE0, FACES, POSES, blinkAt, breathAt, mixObj } 
 import { recolor } from './kaka_look.js';
 import { KINDS, need, frameSrc, setTX, forget, setHead, setNoBar } from './screen.js';
 import { KINDS2, applyFx, drawKaka, setTX2, needsOf } from './screen_fx.js';
+import { KINDS3, setTX3 } from './screen_game.js';                 // 66 号：游戏画风的屏幕（像素小屏、RPG 对话框、HUD、战争迷雾、集章卡），写法见文件开头
 import { FX3D } from './fx3d.js';
 import { BKINDS, boardNeeds, setTXb } from './board.js';
 import { Magic } from './magic.js';
@@ -14,14 +15,15 @@ import { Steam } from './steam.js';
 import { Phone } from './phone.js';
 import { Holo } from './holo.js';
 import { Notebook } from './notebook.js';
+import { Pad } from './pad.js';                                      // 66 号：桌上的游戏手柄（导演表写 PAD 才摆出来）
 import { TL, TX, clamp, ease, ease5, easeOut, easeIO, lerp, P, hash } from './kit.js';
 import { Overlay } from './overlay.js';
 import SHOTS from './shots.js';
 
 const V = (a) => new THREE.Vector3(...a);
 const json = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
-setTX(TX); setTX2(TX); setTXb(TX);
-const ALL = { ...KINDS, ...KINDS2 };
+setTX(TX); setTX2(TX); setTXb(TX); setTX3(TX);
+const ALL = { ...KINDS, ...KINDS2, ...KINDS3 };
 // 显示器可视区域：中心、宽高都从 desk.js 的尺寸表来。scrPt(u, v)：屏幕上 (u, v)（左上 0,0，右下 1,1）在房间里的位置
 const MON = { x: DIM.desk.x, y: DIM.mon.cy, z: DIM.mon.z + DIM.mon.t / 2 + .0003, w: DIM.mon.vw, h: DIM.mon.vh };
 export const scrPt = (u, v) => V([MON.x + (u - .5) * MON.w, MON.y - (v - .5) * MON.h, MON.z]);
@@ -51,6 +53,7 @@ export class Film {
     // 手机翻过来亮屏（phone.js）、小机器人打出全息投影（holo.js）。导演表里没有这张表就不建，片场照旧
     this.phone = S.PHONE?.length ? new Phone(this.stage, set, extras, S.PHONE, TX) : null;
     this.holo = S.HOLO?.length ? new Holo(this.stage, this.home, S.HOLO, TX) : null;
+    this.pad = S.PAD ? new Pad(this.stage, set, S.PAD, TX) : null;
     this.boards = (S.BOARD || []).map((b) => ({ ...b, t0: TX(b.t0), t1: TX(b.t1) }));
     this.lines = Object.values(TL.lines);
     this.over = new Overlay(S, TX);
@@ -185,7 +188,7 @@ export class Film {
     applyState(this.rig, S);
     this.magic?.update(t, h.position);
     this.light(t);
-    this.steam?.update(t);
+    this.steam?.update(t); this.pad?.update(t);
     this.fx3d.update(t, (x) => this.poseAt(x));
     this.phone?.update(t); this.holo?.update(t, (x) => this.poseAt(x)); this.notebook?.update(t);
     this.drawBoard(t);
@@ -221,7 +224,7 @@ export class Film {
   // 运动模糊：harness3 的每个采样在自己的快门时刻调它，只推进快的东西（飞的小机器人、照片、掉落的字块）。慢的东西整帧只算一次
   tickFast(t) {
     const mg = this.magic?.kaka(t, this.home); if (mg) this.hold.position.copy(mg.pos);
-    this.magic?.update(t, this.hold.position, true); this.fx3d.update(t, (x) => this.poseAt(x)); this.phone?.update(t); this.notebook?.update(t, true);
+    this.magic?.update(t, this.hold.position, true); this.fx3d.update(t, (x) => this.poseAt(x)); this.phone?.update(t); this.notebook?.update(t, true); this.pad?.update(t);
   }
   // 小机器人抬起来的那只手（世界坐标）：笔记本的光线从这里拉出去
   handNear() { this.hold.updateWorldMatrix(false, true); let best = null; for (const a of this.rig.arms) { const q = a.hand.getWorldPosition(new THREE.Vector3()); if (!best || q.y > best.y) best = q; } return best; }

@@ -174,10 +174,10 @@ def ear_list(E, C, ck, TL, rep):
     for name, A in C.get('ambience', {}).items():
         if not isinstance(A, dict) or 'segments' not in A:
             continue
-        t0 = ck.at(A.get('at', 0)); segs = A['segments']
-        desc = '；'.join(f"{mmss(t0 + float(s['from']))} " + ' + '.join(L.get('role', '') + ' ' + Path(L['file']).stem for L in s['layers'])
+        t0 = ck.at(A.get('at', 0)); segs = A['segments']; rel = lambda v: ck.at(v) - t0 if isinstance(v, str) else float(v)   # 时间写法或段内秒数
+        desc = '；'.join(f"{mmss(t0 + rel(s['from']))} " + ' + '.join(L.get('role', '') + ' ' + Path(L['file']).stem for L in s['layers'])
                         for s in segs)
-        must.append((t0, f"**{mmss(t0)}–{mmss(t0 + float(A['dur']))} 环境声 {name}**：{desc}。环境声比配乐低 {A.get('under_music', 7)} LU。"
+        must.append((t0, f"**{mmss(t0)}–{mmss(t0 + rel(A['dur']))} 环境声 {name}**：{desc}。环境声比配乐低 {A.get('under_music', 7)} LU。"
                          '听两件事：是不是刚好垫在音乐底下、不抢；切画面时跟着一起换，会不会突兀。'))
     ev = []
     if (E / 'out/sfx_set.wav').exists():
@@ -237,7 +237,11 @@ if __name__ == '__main__':
     # 成片和体检
     video = Path(opt('--video', E / 'out/final.mp4'))
     rep = {}
-    if video.exists():
+    readable = video.exists() and subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(video)],
+                                                 capture_output=True).returncode == 0
+    if video.exists() and not readable:   # 66 期：达芬奇还在写 final.mp4 时试跑 publish，ffprobe 读不了（moov atom not found），整个脚本报错退出
+        problems.append(f'成片 {video} 还读不了，多半是达芬奇还在写（出完再跑）')
+    elif video.exists():
         from verify import check
         rep = check(E, video, expect=expect, want_sheet=True)
         problems += rep['问题']

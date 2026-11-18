@@ -129,12 +129,12 @@ export function table(g, w, h, it, t) {
 // hl：这个时刻荧光笔从左往右扫过这一条；strike：这个时刻划掉；fix：划掉以后跟在后面出现的新写法（金色）
 // center: 1 整块清单在画面里横向居中（悬浮段的板上用：不然字只占左边三分之一，右边一大片空着）；subSize 小字字号（默认 22） ----------
 export function list(g, w, h, it, t) {
-  const A = chrome(g, w, h, it.title, it.sub), s = A.s, n = it.items.length, gap = Math.min(150, (A.h / s - 120) / n);
+  const A = chrome(g, w, h, it.title, it.sub), s = A.s, n = it.items.length, gap = it.gap ?? Math.min(150, (A.h / s - 120) / n);   // 66 号：gap、top 可以自己写（悬浮板上字大、条数少的时候用）
   let X = 90 * s;
   if (it.center) { let mw = 0; for (const q of it.items) { g.font = `700 ${(it.big || 38) * s}px ${SANS}`; mw = Math.max(mw, g.measureText(q.text).width);
       if (q.sub) { g.font = `500 ${(it.subSize || 22) * s}px ${SANS}`; mw = Math.max(mw, g.measureText(q.sub).width); } }
     X = Math.max(90 * s, (w - (mw + 52 * s)) / 2); }
-  let y = A.y + 90 * s; g.textBaseline = 'middle';
+  let y = A.y + (it.top ?? 90) * s; g.textBaseline = 'middle';
   if (it.lhead) { g.font = `700 ${40 * s}px ${SANS}`; g.fillStyle = C.text; g.fillText(it.lhead, X, y); y += 80 * s; }
   it.items.forEach((q, i) => { const on = P(t, TX0(q.at ?? it.t0), .4), cur = i === it.items.findLastIndex((z) => t >= TX0(z.at ?? it.t0)), u = easeOut(on);
     g.save(); g.globalAlpha = .25 + .75 * u; g.translate((1 - u) * 26 * s, 0);
