@@ -10,6 +10,9 @@
             选中的铺底也有 1 到 3 秒，安静的长音本来就会掉下去）
   突变次数  1 秒内响度跳 9 dB 以上的次数；循环感：响度包络在 4 到 20 秒间隔上的最大自相关。这两个只在同一段的候选之间比，
             不做提醒：64 期选中的 toy_4101 突变 185 次，比淘汰的 toy_3101（138）还多，安静、有呼吸的铺底这个数天然就大
+  最亮dB    15 秒一窗，6 到 12 kHz 比 100 Hz 到 2 kHz 低几 dB，取最亮的一窗，最亮在 = 那一窗从第几秒起；-15 以上提醒
+            （65 期 crew_b_6601 最后 45 秒冒出沙锤一类的声音，-11，作者说过配乐刺耳；64 期用上的铺底做完母带都在 -18.8 以下）。
+            被提醒但别的都好，可以不换：在 cues.json 这一段写 "eq": "highshelf=f=5000:g=-6"，master_beds 会压下去
 开场另看：
   起伏      前 6 秒和最响 10 秒的响度差（dB），越大越有「从安静到展开」的感觉（选中的 A3 是 27）
   高潮在    最响的 2 秒落在第几秒
@@ -28,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _snd import read_mono, cues  # noqa: E402
 from pulse import pulse, files_from_args  # noqa: E402
 
-LIMITS = {'拍子感': (0.4, '拍子感偏强'), '人声带': (30, '抢人声'), '高频毛刺': (0.8, '有沙沙声'), '断掉秒': (4, '中间断了')}
+LIMITS = {'拍子感': (0.4, '拍子感偏强'), '人声带': (30, '抢人声'), '高频毛刺': (0.8, '有沙沙声'), '断掉秒': (4, '中间断了'), '最亮dB': (-15, '有一段偏亮')}
 
 
 def bed_metrics(f):
@@ -39,6 +42,9 @@ def bed_metrics(f):
     e = (S ** 2).sum(0); c = np.cumsum(e) / e.sum(); roll = fr[np.searchsorted(c, .85)] / 1000
     voice = e[(fr > 1000) & (fr < 4000)].sum() / e.sum() * 100
     hf = S[:, fr > 8000].sum(1); jitter = float(np.mean(np.abs(np.diff(hf))) / (np.mean(hf) + 1e-9))
+    hi = (S[:, (fr > 6000) & (fr < 12000)] ** 2).sum(1); lo = (S[:, (fr > 100) & (fr < 2000)] ** 2).sum(1) + 1e-12
+    w = max(1, int(15 * sr / n)); st = max(1, w // 3)
+    br = [10 * np.log10(hi[i:i + w].sum() / lo[i:i + w].sum() + 1e-12) for i in range(0, max(1, len(hi) - w), st)]; kb = int(np.argmax(br))
     body = db[: max(1, len(db) - 30)]; sm = np.convolve(body, np.ones(5) / 5, 'same')
     jumps = int(sum(1 for i in range(len(sm) - 10) if sm[i + 10] - sm[i] > 9))
     run, cut = 0, len(db)   # 从后往前找最后一段连着 1 秒有声的地方，那以后算淡出，不算断（65 期三条候选因此被误报）
@@ -51,7 +57,8 @@ def bed_metrics(f):
     lags = range(40, min(200, len(env) // 2), 5)
     ac = max((float(np.corrcoef(env[:-l], env[l:])[0, 1]) for l in lags), default=0.0)
     return dict(时长=round(len(x) / sr), 频宽kHz=round(float(roll), 2), 人声带=round(float(voice), 1), 高频毛刺=round(jitter, 2),
-                突变次数=jumps, 断掉秒=gap, 循环感=round(ac, 2), 平均dB=round(float(np.mean(body)), 1)), db
+                突变次数=jumps, 断掉秒=gap, 循环感=round(ac, 2), 平均dB=round(float(np.mean(body)), 1),
+                最亮dB=round(float(br[kb]), 1), 最亮在=int(kb * st * n / sr)), db
 
 
 def open_metrics(db):

@@ -1,7 +1,7 @@
 {
  "说明": "这一集的声音都写在这里：配乐（beds 写什么、plan 怎么拼）、柔和音效（sfx_soft）、片场动作声（set_fx）、环境声（ambience）、电平（levels）。时间写法和导演表一样：12.5 | a01（这句开始）| a01$（这句结束）| a01:关键词 | END（片尾卡）| DUR（全片结束），后面可以跟 +0.3 / -0.2。以「说明」开头的键是给人看的，脚本不读。",
 
- "说明_beds": "作曲用。每段一个名字，gen_beds.py 按它写候选（music/cands/<名字>_<种子>.wav），用户挑定以后把候选名写进 pick，master_beds.py 做成 music/<名字>.wav。role 是 open 的那段是开场：不压缩、不统一响度，留着起伏。dur 写 auto 就按 plan 里这段要用的长度写，不循环。描述用正面的整句（见 stages/3-作曲.md），calm 默认 false，写 true 会在描述后面加一句「平缓、给旁白让路」。一段别超过 240 秒，长的在 plan 里拆两截，写 xf_out / xf_in。key 也用来给柔和音效挑音高。",
+ "说明_beds": "作曲用。每段一个名字，gen_beds.py 按它写候选（music/cands/<名字>_<种子>.wav），用户挑定以后把候选名写进 pick，master_beds.py 做成 music/<名字>.wav。role 是 open 的那段是开场：不压缩、不统一响度，留着起伏。dur 写 auto 就按 plan 里这段要用的长度写，不循环。描述用正面的整句（见 stages/3-作曲.md），calm 默认 false，写 true 会在描述后面加一句「平缓、给旁白让路」。一段别超过 240 秒，长的在 plan 里拆两截，写 xf_out / xf_in。某一段比别的亮（初筛提醒「有一段偏亮」），可以写 eq，比如 \"eq\": \"highshelf=f=5000:g=-6\"，master_beds 接在统一的母带链后面。key 也用来给柔和音效挑音高。",
  "beds": {
   "open": {
    "role": "open",

@@ -6,6 +6,7 @@
 原来的 9 kHz 高架 +1.5 dB 去掉了），2:1 轻压缩，两遍 loudnorm 到 -20 LUFS（真峰值 -2，LRA 20），结尾 3 秒淡出，48 kHz 24 bit。
 所有铺底统一 -20 LUFS，混音时再整体压到人声底下（stems.py 里 -13 dB）。
 开场（role 是 open）只转成 48 kHz 原样拷过去，不压：开场要保住从安静到展开的起伏，音量在 plan 的 gain 里给（64 期是 4；给到 11 时总峰值超了）。
+某一段比别的段亮（比如结尾冒出沙锤、镲片），在 cues.json 的这一段写 "eq": "highshelf=f=5000:g=-6"，接在统一的链后面（65 期 crew_b）。
 旧的 music/<段名>.wav 不删，挪到 music/old/<段名>_<时间>.wav 留着对照。"""
 import json, shutil, subprocess, sys, time
 from pathlib import Path
@@ -18,19 +19,19 @@ PRE = ('highpass=f=30,equalizer=f=300:t=q:w=1.0:g=-2,equalizer=f=2500:t=q:w=1.2:
        'acompressor=threshold=-22dB:ratio=2:attack=30:release=300:makeup=1')
 
 
-def master(src, dst, is_open):
+def master(src, dst, is_open, eq=''):
     tmp = dst.with_name('_' + dst.name); ds = dst.with_name('_ds_' + dst.name)
     n, top = despur(src, ds); print(f'  {src.stem}：去掉 {n} 条哨音' + (f'（{top}）' if n else '')); src = ds
     if is_open:
         cmd = ['ffmpeg', '-y', '-v', 'error', '-i', str(src), '-af', 'aresample=48000', '-c:a', 'pcm_s24le', str(tmp)]
     else:
-        end = duration(src)
-        r = subprocess.run(['ffmpeg', '-hide_banner', '-i', str(src), '-af', PRE + ',loudnorm=I=-20:TP=-2:LRA=20:print_format=json',
+        end = duration(src); pre = PRE + (',' + eq if eq else '')
+        r = subprocess.run(['ffmpeg', '-hide_banner', '-i', str(src), '-af', pre + ',loudnorm=I=-20:TP=-2:LRA=20:print_format=json',
                             '-f', 'null', '-'], capture_output=True, text=True).stderr
         j = json.loads(r[r.rindex('{'):r.rindex('}') + 1])
         ln = (f"loudnorm=I=-20:TP=-2:LRA=20:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}"
               f":measured_thresh={j['input_thresh']}:offset={j['target_offset']}:linear=true")
-        cmd = ['ffmpeg', '-y', '-v', 'error', '-i', str(src), '-af', f'{PRE},{ln},afade=out:st={max(0, end - 3):.3f}:d=3,aresample=48000',
+        cmd = ['ffmpeg', '-y', '-v', 'error', '-i', str(src), '-af', f'{pre},{ln},afade=out:st={max(0, end - 3):.3f}:d=3,aresample=48000',
                '-c:a', 'pcm_s24le', str(tmp)]
     subprocess.run(cmd, check=True); ds.unlink(missing_ok=True)
     if dst.exists() and not dst.is_symlink():
@@ -50,7 +51,7 @@ if __name__ == '__main__':
         if not src.exists():
             sys.exit(f'没有候选 {src}')
         is_open = B.get(name, {}).get('role') == 'open'
-        master(src, E / f'music/{name}.wav', is_open)
+        master(src, E / f'music/{name}.wav', is_open, B.get(name, {}).get('eq', ''))
         I, TP, _ = loudness(E / f'music/{name}.wav')
-        done.append(f'{name} ← {src.stem}（{I} LUFS，真峰值 {TP}）'); print(done[-1])
+        done.append(f'{name} ← {src.stem}' + (f'（加 {B[name]["eq"]}）' if B.get(name, {}).get('eq') else '') + f'（{I} LUFS，真峰值 {TP}）'); print(done[-1])
     log(E, '3-作曲', '铺底母带：' + '；'.join(done))
