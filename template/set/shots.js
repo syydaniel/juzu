@@ -173,7 +173,7 @@ export default function ({ TX, TL }) {
   //   CAM 一条里写 rack: [[时刻, [x, y, z]], …]，对焦点在镜头里一个个拉过去；滑过去的镜头怕擦着东西，写 arc: .06（米）往后让一点
   //   MAGIC 的 panel 写 parts: [{ until: 'e02:词', kind: 'bigwords', … }, { kind: 'list', center: 1, … }]，板上分几段，到点交叉淡化
   //   MAGIC 写 end: 'gather'，讲完照片缩回小机器人手心，不上墙
-  //   GLASS 宽高按字自动量；靠下的卡写 anchor: 'bottom'（底边钉在 y + h），minW 最小宽度，fit: false 用写死的 w、h
+  //   GLASS 宽高按字自动量；靠下的卡写 anchor: 'bottom'（底边钉在 y + h），minW 最小宽度，fit: false 用手写的固定 w、h
   //   SCREEN 的 list 写 center: 1 整块居中、subSize 小字字号；bigwords 写 kSize、sSize 改上下两行小字的字号
   //   KAKA 一条里写 act: 'nod' 点头、'shake' 摇头；FX3D 的字块写 off: 时刻，被推下桌
 

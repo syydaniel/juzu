@@ -95,7 +95,7 @@ export class Overlay {
   }
 
   // 磨砂卡的大小按字量出来：宽 = 最长那行 + 两边留白，高 = 最后一行 + 底边留白。手写的宽高一改字就对不上（框比字大一圈，或者字跑出框）。
-  // x.minW 最小宽度（默认 300）；x.fit === false 才用写死的 x.w、x.h
+  // x.minW 最小宽度（默认 300）；x.fit === false 才用手写的固定 x.w、x.h
   fitBox(g, x) {
     if (x._fit) return x._fit; if (x.fit === false) return (x._fit = [x.w, x.h]);
     let y = 70, R = 0, B = 0; const m = (f, s) => { g.font = f; return g.measureText(s).width; };
