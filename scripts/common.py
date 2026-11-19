@@ -75,7 +75,7 @@ class Clock:
             return float(s)
         except ValueError:
             pass
-        m = re.match(r'^(?P<base>.+?)(?P<off>[+-]\d+(?:\.\d+)?)?$', s)
+        m = re.match(r'^(?P<base>.+?)(?P<off>[+-](?:\d+(?:\.\d+)?|\.\d+))?$', s)   # 「+.42」也认（导演表 JS 那边一直认）
         base, off = m.group('base'), float(m.group('off') or 0)
         L = self.tl['lines']
         if base == 'END':
