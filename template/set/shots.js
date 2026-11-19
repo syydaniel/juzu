@@ -177,6 +177,11 @@ export default function ({ TX, TL }) {
   //   GLASS 宽高按字自动量；靠下的卡写 anchor: 'bottom'（底边钉在 y + h），minW 最小宽度，fit: false 用手写的固定 w、h
   //   SCREEN 的 list 写 center: 1 整块居中、subSize 小字字号；bigwords 写 kSize、sSize 改上下两行小字的字号
   //   KAKA 一条里写 act: 'nod' 点头、'shake' 摇头；FX3D 的字块写 off: 时刻，被推下桌
+  //   SCREEN 的 kind 写 screen_game.js 里的像素游戏屏（gtitle gstat gsave gsearch glevels ghud gflow gcheck gdialog gload gcar gboss gbars gfog gtimeline gmeter gstamp ggolf），
+  //     例：{ kind: 'gcheck', t0: 'b05', t1: 'b06', title: '拿游戏对一对', head: [['b05', '三条全中']], cols: ['', '游戏里'], rows: [{ k: '目标', v: '任务点', at: 'b05:目标', mark: 'check' }] }
+
+  // 桌上的游戏手柄（pad.js）：hop 被扔、蹦一下落回桌面（有一声「嗒」），rumble 震一下，glow 中间的钮亮着。不用就留 null
+  const PAD = null;   // { hop: ['c06:扔+.35'], rumble: [['b02:手柄', .7]], glow: [['b02', 'b03']] }
 
   // 柱状图的数字：从这一份导演表里数出来，改了表数字跟着变
   const bars = SCREEN.find((s) => s.kind === 'bars');
@@ -184,5 +189,5 @@ export default function ({ TX, TL }) {
   bars.max = Math.max(...bars.rows.map((r) => r.v)) * 1.15;
   // 运镜顺滑（smooth.js）：同机位连切并掉、短镜头不来回切、同一区域滑过去；换光的那几刀保持硬切。放在 LIGHT 写完以后
   smooth(CAM, TX, TL.duration, CAMS, { cuts: (Array.isArray(LIGHT) ? LIGHT : []).filter((l) => l.at !== 0).map((l) => l.at) });
-  return { KAKA_AT, CAMS, SET, LIGHT, BLINDS, MAGIC, CALM, KAKA_LOOK, DATA, VOICE_ENV, CAM, SCREEN, KAKA, KAKA_IN, BOARD, FX3D, GLASS, STICK, PHONE, HOLO, NOTEBOOK, VISIT, HERO, TITLES, CHAPTERS, PROGRESS, CTA, FADES, NOSUB, BADGE, NOBADGE };
+  return { KAKA_AT, CAMS, SET, LIGHT, BLINDS, MAGIC, CALM, KAKA_LOOK, DATA, VOICE_ENV, CAM, SCREEN, KAKA, KAKA_IN, BOARD, FX3D, GLASS, STICK, PHONE, HOLO, NOTEBOOK, VISIT, PAD, HERO, TITLES, CHAPTERS, PROGRESS, CTA, FADES, NOSUB, BADGE, NOBADGE };
 }

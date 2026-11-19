@@ -30,7 +30,7 @@ description: 剧组：把一条 B 站横屏知识视频从改文案一路做到�
 |---|---|---|---|
 | 0 | 开工 | `juzu new 名字 [--from 上一集]`，`juzu doctor`，读上一集的经验总结 | `stages/0-开工.md` |
 | 1 | 编剧 | 看后台和同类爆款，出候选题、标题、封面方向；写稿；`juzu flavor`、`juzu score` | `stages/1-编剧.md`，**停点** |
-| 2 | 配音 | `juzu lines` → `juzu tts` → `juzu timeline` | `stages/2-配音.md` |
+| 2 | 配音 | `juzu lines` → `juzu tts` → `juzu timeline`（出片后只改一句：`tts <键>` → `keep_slot <键>` → `timeline`） | `stages/2-配音.md` |
 | 3 | 作曲 | ACE-Step 写开场和铺底，量拍子感、筛遮挡 | `stages/3-作曲.md`，**停点** |
 | 4 | 美术和导演 | 片场升级一点，写导演表，抽帧检查 | `stages/4-美术和导演.md` |
 | 5 | 拟音 | 片场动作音效、章节气声、环境声 | `stages/5-拟音.md` |

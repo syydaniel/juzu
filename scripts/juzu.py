@@ -10,7 +10,7 @@ sys.path.insert(0, str(HERE))
 from common import cfg
 
 # 每个命令用哪个 Python：配音要 mlx，作曲要 ACE-Step 的环境，其余用普通的（numpy、soundfile、scipy）
-PY = {'tts': 'py_audio', 'timeline': 'py_audio', 'gen_beds': 'py_music'}
+PY = {'tts': 'py_audio', 'timeline': 'py_audio', 'keep_slot': 'py_audio', 'gen_beds': 'py_music'}
 DIRS = [HERE, HERE / 'copy', HERE / 'sound']
 SKIP = {'common', 'juzu', '__init__'}
 
