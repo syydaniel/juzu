@@ -33,11 +33,11 @@ for need in ('vo.wav', 'bed.wav'):
 FX = [O / n for n in ('sfx_cues.wav', 'sfx_set.wav') if (O / n).exists()]
 AMB = []
 for name, A in C.get('ambience', {}).items():
-    if not isinstance(A, dict) or 'segments' not in A:
+    if not isinstance(A, dict) or ('segments' not in A and 'script' not in A):   # 78 号：script 写的是做这条环境声的脚本（不走 ambience.py）
         continue
     p = E / f'music/amb/{name}.wav'
     if not p.exists():
-        sys.exit(f'cues.json 里有环境声 {name}，但没有 music/amb/{name}.wav：先跑 juzu.py ambience')
+        sys.exit(f'cues.json 里有环境声 {name}，但没有 music/amb/{name}.wav：先跑 ' + (A['script'] if 'script' in A else 'juzu.py ambience'))
     t0 = CK.at(A.get('at', 0)); d = CK.at(A['dur']) - t0 if isinstance(A['dur'], str) else float(A['dur'])   # dur 可以写时间写法（DUR）
     if t0 >= DUR:
         continue

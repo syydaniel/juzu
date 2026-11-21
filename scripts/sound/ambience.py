@@ -8,6 +8,9 @@
 - 自己下载的放进这一集的 sfx/lib/，旁边写一份 来源.md（网址、许可）。很多免费音效站允许商用，但不许把原文件单独再分发，
   所以 sfx/lib 不能进任何公开仓库，skill 里也不带任何声音文件。
 - 达芬奇自带的 Fairlight 音效库（config 里 ambience_dirs 的默认值）。64 期查过：那里没有火车、风、发动机，这些要去网上找。
+  75 期查过：「Daytime Ambience with Car Drive-Bys and Crow」整条都有乌鸦（作者听着不舒服，别用）；窗外的白天用「Ext City Ambience, Car Drive-Bys,
+  Pedestrian, Air」，避开 28–42 秒的行人声。别拿一小段录音反复循环：里面哪怕有一声小鸟叫，循环起来也会每十几秒重复一次，
+  宁可从几段干净的地方随机取 15–25 秒的块交叉拼长（75 期的 sfx/mk_amb_day.py）。
 
 cues.json 的写法（一段画面一个 clip，时间是这段画面里的秒数，0 是 clip 开头）：
   "ambience": {
@@ -165,7 +168,7 @@ if __name__ == '__main__':
         sys.exit(0)
     only = a[a.index('--only') + 1] if '--only' in a else None
     AMB = cues(E).get('ambience', {})
-    AMB = {k: v for k, v in AMB.items() if isinstance(v, dict) and 'segments' in v and (only is None or k == only)}
+    AMB = {k: v for k, v in AMB.items() if isinstance(v, dict) and 'segments' in v and 'script' not in v and (only is None or k == only)}   # 78 号：写了 script 的由那个脚本自己做（比如四层窗外声 sfx/amb78.py），这里不碰
     if not AMB:
         sys.exit('cues.json 里没有 ambience（写法见这个脚本开头的说明）')
     CK = None
