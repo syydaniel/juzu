@@ -2,7 +2,10 @@
   juzu.py tts [句子键…]      不给键 = 只做文本有改动的句子；给了键 = 强制重做这几句
   juzu.py tts --repick       不用显卡：拿已经念过的每一遍原声，按现在的停顿设置重新压停顿、重新挑（改了 episode.json 的 voice 以后先跑这个）
   juzu.py tts --off          只重做语速超出目标范围的句子（先 --repick，再 --off）
-每句念几遍，用 Whisper 听写核对，选听写最准、语速最接近目标的一遍，再把句内过长的停顿压短。
+  juzu.py tts --cut          只重做句尾被截断、又没有别的遍可换的句子（先 --repick，再 --cut）
+每句念几遍，用 Whisper 听写核对，选听写最准、句尾自然收住、语速最接近目标的一遍，再把句内过长的停顿压短。
+句尾被截断（模型在发声中途停了，最后 20 毫秒还高于 -45 dBFS）的那一遍尽量不用：75 期作者听出「切音」，量下来四成的遍句尾没收干净。
+存成品时每句头尾都淡一下（头 4 毫秒、尾 30 毫秒），去掉咔嗒声。
 成品不做时间拉伸（拉伸会出电音）：想说快一点，就给模型一条加快过的参考音。
 
 这一集自己的语速写在 episode.json 的 "voice" 里（66 期作者：「语速稳定一点、平缓一点，按原声的 1.03 到 1.05 倍」）：
@@ -26,7 +29,8 @@ VC = (json.load(open(E / 'episode.json')).get('voice', {}) if (E / 'episode.json
 RATE = float(VC.get('rate', C['voice_rate'])); TOL = VC.get('tol'); KEEP, LONGEST = VC.get('keep', .28), VC.get('longest', .40)
 MAX_TAKES = int(VC.get('takes', 4))
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
-REPICK, OFF = '--repick' in sys.argv, '--off' in sys.argv
+REPICK, OFF, CUT = '--repick' in sys.argv, '--off' in sys.argv, '--cut' in sys.argv
+CUT_DB = float(VC.get('cut_db', -45))
 
 DIG = '〇一二三四五六七八九'
 def norm(s):
@@ -36,6 +40,29 @@ def norm(s):
 def trim(a, sr):
     idx = np.where(np.abs(a) > 0.01)[0]
     return a[max(0, idx[0] - int(0.03 * sr)): idx[-1] + int(0.25 * sr)] if len(idx) else a
+
+def end_level(a, sr, ms=20):
+    """去掉末尾的数字静音以后，最后 ms 毫秒的电平（dBFS）。自然收尾的句子这里已经衰减到 -50 以下；还高，说明模型在发声中途停了（切音）。"""
+    nz = np.where(np.abs(a) > 1e-4)[0]
+    if not len(nz):
+        return -120.0
+    e = nz[-1] + 1; n = int(sr * ms / 1000)
+    return round(float(20 * np.log10(np.sqrt(np.mean(a[max(0, e - n):e] ** 2)) + 1e-9)), 1)
+
+def is_cut(x):
+    return x.get('end', -120) > CUT_DB
+
+def smooth_ends(a, sr, fin=.004, fout=.03, fcut=.09):
+    """头 4 毫秒淡入、尾 30 毫秒余弦淡出：只为去掉咔嗒声。被截掉的字救不回来，所以挑遍时先挑自然收尾的。
+    实在没有自然收尾的一遍（75 期 c09「超人」、g07「赞吧」、b01「四千多万」念了七八遍都停在 -37 dB 上下，多是 n 结尾的鼻音还在响），
+    尾巴淡 90 毫秒，听着像鼻音自己收住，不像一刀切。"""
+    a = a.copy(); nz = np.where(np.abs(a) > 1e-4)[0]
+    if not len(nz):
+        return a
+    e = nz[-1] + 1; n = min(int((fcut if end_level(a, sr) > CUT_DB else fout) * sr), e)
+    a[e - n:e] *= (0.5 + 0.5 * np.cos(np.linspace(0, np.pi, n))).astype(a.dtype)
+    m = min(int(fin * sr), len(a)); a[:m] *= np.linspace(0, 1, m).astype(a.dtype)
+    return a
 
 def tighten(a, sr, keep=0.28, longest=0.40):
     """只动静音：句内长于 longest 秒的停顿压到 keep 秒。"""
@@ -64,10 +91,11 @@ def ok_rate(r):
 
 def pick(takes):
     """听写最准的那几遍里（差 0.015 以内；设了 tol 时放宽到 0.035，而且不低于 0.9），挑语速最接近目标的。
-    放宽是因为 66 期的 a03：「R 星」每遍都被听成「阿星」「二星」，0.03 的差只是听写的误差，语速 5.50 的那遍反而被挤掉了。"""
+    放宽是因为 66 期的 a03：「R 星」每遍都被听成「阿星」「二星」，0.03 的差只是听写的误差，语速 5.50 的那遍反而被挤掉了。
+    句尾被截断的排在最后（75 期）：语速差 1% 听不出来，切音一耳朵就听出来。"""
     top = max(x['acc'] for x in takes); slack = .035 if TOL else .015
     pool = [x for x in takes if x['acc'] >= min(top, max(.9, top - slack))]
-    return min(pool, key=lambda x: (not ok_rate(x['rate']), abs(x['rate'] - RATE)))
+    return min(pool, key=lambda x: (is_cut(x), not ok_rate(x['rate']), abs(x['rate'] - RATE)))
 
 def measure(p, text):
     """一遍原声 → 压停顿以后的音频和语速。"""
@@ -82,7 +110,7 @@ FORCE = VC.get('force', {})     # 听过以后指定用第几遍：{"d09": 7}（
 
 def save(k, takes, text):
     best = takes[FORCE[k]] if k in FORCE and FORCE[k] < len(takes) else pick(takes); i = takes.index(best)
-    tk = np.load(OUT / 'takes' / f'{k}_{i}.npy'); f = OUT / f'{k}.wav'; sf.write(f, tk, 24000)
+    tk = np.load(OUT / 'takes' / f'{k}_{i}.npy'); f = OUT / f'{k}.wav'; sf.write(f, smooth_ends(tk, 24000), 24000)
     choice[k] = dict(best, file=str(f.relative_to(E)), text=text, tries=len(takes), takes=takes)
     json.dump(choice, open(cf, 'w'), ensure_ascii=False, indent=1)
 
@@ -90,8 +118,10 @@ def report(tag):
     r = [c['rate'] for k, c in choice.items() if k in LINES]
     off = sorted(k for k, c in choice.items() if k in LINES and not ok_rate(c['rate']))
     low = [k for k, c in choice.items() if c['acc'] < 0.9]
+    cut = sorted(k for k, c in choice.items() if k in LINES and is_cut(c))
     msg = (f"{tag}：{len(r)} 句，共 {round(sum(c['dur'] for c in choice.values()), 1)} 秒；语速平均 {np.mean(r):.2f} 字/秒（目标 {RATE}），"
-           f"标准差 {np.std(r):.2f}，{min(r)}–{max(r)}；超出范围的：{off or '无'}；听写准确率低于 0.9 的：{low or '无'}")
+           f"标准差 {np.std(r):.2f}，{min(r)}–{max(r)}；超出范围的：{off or '无'}；听写准确率低于 0.9 的：{low or '无'}；"
+           f"句尾被截断的：{cut or '无'}" + ('（跑 juzu.py tts --cut 重念）' if cut else ''))
     print('DONE', msg); log(E, '2-配音', '配音：' + msg)
     return off
 
@@ -121,7 +151,7 @@ if REPICK:
                 acc = round(difflib.SequenceMatcher(None, norm(text), norm(asr)).ratio(), 3); a_txt = asr.strip()
             else:
                 a_txt = old[p.name].get('asr', '')
-            takes.append(dict(take=str(p), acc=acc, dur=round(len(tk) / sr, 3), rate=rate, asr=a_txt))
+            takes.append(dict(take=str(p), acc=acc, dur=round(len(tk) / sr, 3), rate=rate, asr=a_txt, end=end_level(tk, sr)))
         if takes:
             save(k, takes, text)
             print(k, f"{len(takes)} 遍 → 选第 {Path(choice[k]['take']).stem.split('_')[-1]} 遍 rate {choice[k]['rate']}" + ('' if ok_rate(choice[k]['rate']) else '  超出范围'), flush=True)
@@ -148,7 +178,10 @@ print('参考音：', REF.name, '｜参考文本：', REF_TXT[:30], '…', f'｜
 
 from mlx_audio.tts.utils import load_model
 m = load_model(C['tts_model'])
-if OFF:
+if CUT:
+    keys = [k for k in LINES if k in choice and is_cut(choice[k])]; force = True
+    print('句尾被截断、要重念的：', keys, flush=True)
+elif OFF:
     keys = [k for k in LINES if k in choice and not ok_rate(choice[k]['rate'])]; force = True
     print('超出范围、要重做的：', keys, flush=True)
 else:
@@ -162,7 +195,7 @@ for k in keys:
     takes = list(choice[k].get('takes', [])) if k in choice and choice[k].get('text') == text else []
     start = len(takes)
     for t in range(start, start + MAX_TAKES):
-        done = [x for x in takes if x['acc'] >= .95 and ok_rate(x['rate'])] if TOL else [x for x in takes if x['acc'] >= .97]
+        done = [x for x in takes if x['acc'] >= .95 and ok_rate(x['rate']) and not is_cut(x)] if TOL else [x for x in takes if x['acc'] >= .97 and not is_cut(x)]
         if done and t - start >= 2:
             break
         res = list(m.generate(text=text, ref_audio=str(REF), ref_text=REF_TXT, language='Chinese'))
@@ -173,9 +206,9 @@ for k in keys:
         acc = difflib.SequenceMatcher(None, norm(text), norm(asr)).ratio()
         tk = tighten(a.copy(), sr, KEEP, LONGEST)
         np.save(OUT / 'takes' / f'{k}_{t}.npy', tk.astype(np.float32))
-        takes.append(dict(take=str(p), acc=round(acc, 3), dur=round(len(tk) / sr, 3), rate=round(len(norm(text)) / (len(tk) / sr), 2), asr=asr.strip()))
+        takes.append(dict(take=str(p), acc=round(acc, 3), dur=round(len(tk) / sr, 3), rate=round(len(norm(text)) / (len(tk) / sr), 2), asr=asr.strip(), end=end_level(tk, sr)))
         n_takes += 1
-        print(k, t, f"acc {acc:.2f} dur {takes[-1]['dur']:.1f}s rate {takes[-1]['rate']:.2f}", asr.strip(), flush=True)
+        print(k, t, f"acc {acc:.2f} dur {takes[-1]['dur']:.1f}s rate {takes[-1]['rate']:.2f} end {takes[-1]['end']:.0f}dB{' 截断' if is_cut(takes[-1]) else ''}", asr.strip(), flush=True)
     save(k, takes, text)
 for k in [k for k in choice if k not in LINES]:
     del choice[k]

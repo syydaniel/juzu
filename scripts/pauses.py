@@ -44,8 +44,13 @@ def widen(a, tts, P_IN, P_CM):
     if not ins:
         return a, []
     ins.sort()
+    # 插静音的两边各淡 6 毫秒（75 期）：「静音」只是比最响处低 38 dB，可能还有气声、鼻音的尾巴，直接接上零会有一下硬切
+    a = a.copy(); f = int(.006 * SR); ramp = np.linspace(1, 0, f).astype(a.dtype)
     out, last = [], 0
     for at, d in ins:
-        j = int(at * SR); out += [a[last:j], np.zeros(int(d * SR), a.dtype)]; last = j
+        j = int(at * SR)
+        if j - f > last: a[j - f:j] *= ramp
+        if j + f < len(a): a[j:j + f] *= ramp[::-1]
+        out += [a[last:j], np.zeros(int(d * SR), a.dtype)]; last = j
     out.append(a[last:])
     return np.concatenate(out), ins
